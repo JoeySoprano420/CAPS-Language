@@ -15,6 +15,7 @@ add_executable(caps_frontend
   src/ir/lowering.cpp
   src/analysis/pipeline.cpp
   src/pretty/pretty.cpp
+  src/pretty/ast_dump.cpp
 )
 
 target_include_directories(caps_frontend PRIVATE src)
