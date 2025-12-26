@@ -32,3 +32,37 @@ dot -Tpng topo.dot -o topo.png
 
 Normal (IR dump)
 caps_frontend demo/demo.caps
+
+*****
+
+How it behaves
+DOT output
+caps_frontend --dump-topology=dot demo.caps > topo.dot
+
+
+If channels are ambiguous: you’ll see dashed edges and warnings in stderr:
+
+warning: group 'Demo' channel 'c' ambiguous (writers=2, readers=1)
+
+TEXT output
+caps_frontend --dump-topology=text demo.caps
+
+
+You’ll get a full summary like:
+
+TOPOLOGY group Demo
+processes:
+  - Producer
+  - Consumer
+channels:
+  - c : channel<int;1>
+uses:
+  - c writers={ProducerA, ProducerB} readers={Consumer}  [AMBIGUOUS]
+edges (Process -> Channel -> Process):
+  - ProducerA -> c -> Consumer  (dashed/ambiguous)  note: ambiguous writers={...} readers={...}
+  - ProducerB -> c -> Consumer  (dashed/ambiguous)  note: ...
+END_TOPOLOGY
+
+Dumps all pipeline-safe groups
+
+If you have multiple groups annotated @pipeline_safe, you’ll get one block per group (and one DOT graph per group).
