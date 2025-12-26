@@ -18,36 +18,62 @@ static bool has_ann(const std::vector<Annotation>& anns, const std::string& n) {
 }
 
 
+enum class TopologyFormat { None, Dot, Text };
+
 struct Options {
   bool dump_ast = false;
-  bool dump_topology = false;
+  TopologyFormat dump_topology = TopologyFormat::None;
   bool check_only = false;
   std::string input_file;
 };
 
+
 static void print_usage() {
   std::cerr <<
-    "usage: caps_frontend [--dump-ast] [--dump-topology] [--check-only] <file.caps>\n"
+    "usage: caps_frontend [--dump-ast] [--dump-topology=dot|text] [--check-only] <file.caps>\n"
     "\n"
-    "  --dump-ast       Print parsed+sema-mutated AST (includes injected __last_error if '?' used)\n"
-    "  --dump-topology  Print @pipeline_safe topology as Graphviz DOT to stdout\n"
-    "  --check-only     CI mode: print diagnostics; exit 0 on success, 2 on any error\n";
+    "  --dump-ast             Print parsed+sema-mutated AST\n"
+    "  --dump-topology=dot    Print @pipeline_safe topology as Graphviz DOT\n"
+    "  --dump-topology=text   Print @pipeline_safe topology as human-readable text\n"
+    "  --check-only           CI mode: diagnostics only; exit 0 on success, 2 on any error\n";
 }
+
 
 static bool parse_args(int argc, char** argv, Options& opt) {
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
+
     if (a == "--dump-ast") { opt.dump_ast = true; continue; }
-    if (a == "--dump-topology") { opt.dump_topology = true; continue; }
+
+    if (a.rfind("--dump-topology", 0) == 0) {
+      // Accept: --dump-topology=dot or --dump-topology=text
+      auto eq = a.find('=');
+      if (eq == std::string::npos) {
+        std::cerr << "error: --dump-topology requires '=dot' or '=text'\n";
+        return false;
+      }
+      std::string fmt = a.substr(eq + 1);
+      if (fmt == "dot") opt.dump_topology = TopologyFormat::Dot;
+      else if (fmt == "text") opt.dump_topology = TopologyFormat::Text;
+      else {
+        std::cerr << "error: unknown --dump-topology format: " << fmt << "\n";
+        return false;
+      }
+      continue;
+    }
+
     if (a == "--check-only") { opt.check_only = true; continue; }
+
     if (!a.empty() && a[0] == '-') {
       std::cerr << "unknown option: " << a << "\n";
       return false;
     }
+
     opt.input_file = a;
   }
   return !opt.input_file.empty();
 }
+
 
 int main(int argc, char** argv) {
   Options opt;
@@ -91,21 +117,37 @@ int main(int argc, char** argv) {
     if (!opt.dump_topology) std::cout << "\n";
   }
 
-  // --dump-topology
-  if (opt.dump_topology) {
+  // --dump-topology (all @pipeline_safe groups)
+  if (opt.dump_topology != TopologyFormat::None) {
     bool printed_any = false;
+
     for (auto& g : prog.groups) {
-      if (has_ann(g.annotations, "pipeline_safe")) {
-        auto pg = build_pipeline_graph(g);
-        dump_pipeline_graph_dot(std::cout, g, pg);
-        printed_any = true;
-        break; // default: first pipeline_safe group
+      if (!has_ann(g.annotations, "pipeline_safe")) continue;
+
+      printed_any = true;
+      auto tg = build_topology_graph(g);
+
+      // Emit ambiguous warnings to stderr
+      for (auto& w : tg.ambiguities) {
+        std::cerr << "warning: group '" << g.name << "' channel '" << w.channel
+                  << "' ambiguous (writers=" << w.writers.size()
+                  << ", readers=" << w.readers.size() << ")\n";
+      }
+
+      if (opt.dump_topology == TopologyFormat::Dot) {
+        dump_topology_dot(std::cout, g, tg);
+        std::cout << "\n";
+      } else {
+        dump_topology_text(std::cout, g, tg);
+        std::cout << "\n";
       }
     }
+
     if (!printed_any) {
       std::cerr << "warning: --dump-topology requested but no @pipeline_safe group found\n";
     }
   }
+
 
   // Default output (IR) if not check-only
   if (!opt.check_only) {
