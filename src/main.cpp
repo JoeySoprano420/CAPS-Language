@@ -12,6 +12,12 @@
 #include "pretty/ast_dump.h"
 #include "analysis/pipeline.h"
 
+static bool has_ann(const std::vector<Annotation>& anns, const std::string& n) {
+  for (auto& a : anns) if (a.name == n) return true;
+  return false;
+}
+
+
 struct Options {
   bool dump_ast = false;
   bool dump_topology = false;
