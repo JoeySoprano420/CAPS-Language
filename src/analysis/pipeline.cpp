@@ -2,14 +2,15 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <ostream>
 
 static bool has_ann(const std::vector<Annotation>& anns, const std::string& n) {
   for (auto& a : anns) if (a.name == n) return true;
   return false;
 }
 
-void PipelineChecker::check_group_pipeline_safe(const GroupDecl& g) {
-  if (!has_ann(g.annotations, "pipeline_safe")) return;
+PipelineGraph build_pipeline_graph(const GroupDecl& g) {
+  PipelineGraph pg;
 
   // Map channel name -> {writers, readers}
   struct Use { std::unordered_set<std::string> writers; std::unordered_set<std::string> readers; };
@@ -30,6 +31,71 @@ void PipelineChecker::check_group_pipeline_safe(const GroupDecl& g) {
   };
 
   // Collect use from all actions, including transition branch action lists
+  for (auto& p : g.processes) {
+    for (auto& ob : p.on_blocks) {
+      for (auto& a : ob.actions) record_action(p.name, a);
+      if (ob.transition.kind == Transition::Kind::IfElse) {
+        for (auto& a : ob.transition.then_actions) record_action(p.name, a);
+        for (auto& a : ob.transition.else_actions) record_action(p.name, a);
+      }
+    }
+  }
+
+  // Build edge triples only for channels that have a single writer/reader (otherwise ambiguous)
+  for (auto& [ch, u] : uses) {
+    if (u.writers.size() == 1 && u.readers.size() == 1) {
+      PipelineEdge e;
+      e.from_process = *u.writers.begin();
+      e.channel = ch;
+      e.to_process = *u.readers.begin();
+      pg.edges.push_back(std::move(e));
+    }
+  }
+
+  return pg;
+}
+
+void dump_pipeline_graph_dot(std::ostream& os, const GroupDecl& g, const PipelineGraph& pg) {
+  os << "digraph pipeline_" << g.name << " {\n";
+  os << "  rankdir=LR;\n";
+  os << "  node [shape=box];\n";
+
+  // Ensure all processes appear
+  for (auto& p : g.processes) {
+    os << "  \"" << p.name << "\";\n";
+  }
+
+  // Channel nodes + edges: P -> (channel) -> P
+  for (auto& e : pg.edges) {
+    std::string chNode = "channel:" + e.channel;
+    os << "  \"" << chNode << "\" [shape=ellipse];\n";
+    os << "  \"" << e.from_process << "\" -> \"" << chNode << "\";\n";
+    os << "  \"" << chNode << "\" -> \"" << e.to_process << "\";\n";
+  }
+
+  os << "}\n";
+}
+
+void PipelineChecker::check_group_pipeline_safe(const GroupDecl& g) {
+  if (!has_ann(g.annotations, "pipeline_safe")) return;
+
+  // Map channel name -> {writers, readers}
+  struct Use { std::unordered_set<std::string> writers; std::unordered_set<std::string> readers; };
+  std::unordered_map<std::string, Use> uses;
+  for (auto& c : g.channels) uses[c.name] = Use{};
+
+  auto record_action = [&](const std::string& proc, const Action& a) {
+    if (a.kind == Action::Kind::Send) {
+      uses[a.chan].writers.insert(proc);
+    } else if (a.kind == Action::Kind::Receive) {
+      uses[a.chan].readers.insert(proc);
+    } else if (a.kind == Action::Kind::TrySend) {
+      uses[a.try_send_chan].writers.insert(proc);
+    } else if (a.kind == Action::Kind::TryReceive) {
+      uses[a.try_recv_chan].readers.insert(proc);
+    }
+  };
+
   for (auto& p : g.processes) {
     for (auto& ob : p.on_blocks) {
       for (auto& a : ob.actions) record_action(p.name, a);
