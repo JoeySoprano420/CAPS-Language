@@ -108,3 +108,21 @@ run_group(rt, &trace)
 
 *****
 
+AOT backend file tree
+caps/
+  src/
+    aot/
+      aot_ir_typed.h
+      aot_codegen.h
+      aot_codegen.cpp
+      aot_toolchain.h
+      aot_toolchain.cpp
+
+
+You call it from your compiler driver like:
+
+std::string cpp = caps::aot::emit_cpp(group_typed, /*emit_main=*/true);
+caps::aot::compile_exe(cpp, "out.exe", /*optO2=*/true);
+
+*****
+
