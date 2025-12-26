@@ -1,0 +1,26 @@
+caps/
+  CMakeLists.txt
+  demo/demo.caps
+  src/
+    main.cpp
+    util/diag.h
+    util/diag.cpp
+    util/str.h
+    util/str.cpp
+    lexer/token.h
+    lexer/lexer.h
+    lexer/lexer.cpp
+    ast/ast.h
+    parser/parser.h
+    parser/parser.cpp
+    sema/types.h
+    sema/types.cpp
+    sema/sema.h
+    sema/sema.cpp
+    ir/ir.h
+    ir/lowering.h
+    ir/lowering.cpp
+    analysis/pipeline.h
+    analysis/pipeline.cpp
+    pretty/pretty.h
+    pretty/pretty.cpp
