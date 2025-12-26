@@ -1,0 +1,29 @@
+This back end assumes your front end produces a lowered IR like:
+
+IRProgram → groups
+
+IRGroup → processes, channels, schedule
+
+IRProcess → states → actions + transition (with then/else action lists)
+
+Actions include Send/Receive/TrySend/TryReceive/Assign
+
+Transitions include Goto and IfElse (with then/else actions lists)
+
+It also implements your latest requirements:
+
+Result + ? desugared to __Error state
+
+Preserve error payload automatically
+
+Auto-write __last_error:text on ? failure
+
+Group-local channels are visible to processes (enforced earlier in sema; runtime uses resolved ids)
+
+try_send / try_receive return Result<bool,text> / Result<T,text>
+
+Deterministic blocking semantics, fixed schedule, deadlock detection
+
+Trace format (tick + process-step + channel buffers)
+
+--check-only is front end; backend provides clean exit signals (Completed, Deadlock)
