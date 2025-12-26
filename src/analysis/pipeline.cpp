@@ -1,22 +1,39 @@
 #include "analysis/pipeline.h"
+#include <algorithm>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <ostream>
 
 static bool has_ann(const std::vector<Annotation>& anns, const std::string& n) {
   for (auto& a : anns) if (a.name == n) return true;
   return false;
 }
 
-PipelineGraph build_pipeline_graph(const GroupDecl& g) {
-  PipelineGraph pg;
+static std::string join_set(const std::unordered_set<std::string>& s) {
+  std::vector<std::string> v(s.begin(), s.end());
+  std::sort(v.begin(), v.end());
+  std::ostringstream out;
+  out << "{";
+  for (size_t i = 0; i < v.size(); i++) {
+    if (i) out << ", ";
+    out << v[i];
+  }
+  out << "}";
+  return out.str();
+}
 
-  // Map channel name -> {writers, readers}
-  struct Use { std::unordered_set<std::string> writers; std::unordered_set<std::string> readers; };
-  std::unordered_map<std::string, Use> uses;
+TopologyGraph build_topology_graph(const GroupDecl& g) {
+  TopologyGraph tg;
 
-  for (auto& c : g.channels) uses[c.name] = Use{};
+  // Map channel name -> use info
+  std::unordered_map<std::string, ChannelUse> uses;
+  uses.reserve(g.channels.size());
+  for (auto& c : g.channels) {
+    ChannelUse u;
+    u.channel = c.name;
+    uses[c.name] = std::move(u);
+  }
 
   auto record_action = [&](const std::string& proc, const Action& a) {
     if (a.kind == Action::Kind::Send) {
@@ -30,7 +47,7 @@ PipelineGraph build_pipeline_graph(const GroupDecl& g) {
     }
   };
 
-  // Collect use from all actions, including transition branch action lists
+  // Walk actions AND transition branch action lists
   for (auto& p : g.processes) {
     for (auto& ob : p.on_blocks) {
       for (auto& a : ob.actions) record_action(p.name, a);
@@ -41,96 +58,205 @@ PipelineGraph build_pipeline_graph(const GroupDecl& g) {
     }
   }
 
-  // Build edge triples only for channels that have a single writer/reader (otherwise ambiguous)
-  for (auto& [ch, u] : uses) {
-    if (u.writers.size() == 1 && u.readers.size() == 1) {
-      PipelineEdge e;
-      e.from_process = *u.writers.begin();
-      e.channel = ch;
-      e.to_process = *u.readers.begin();
-      pg.edges.push_back(std::move(e));
+  // Fill tg.uses and tg.ambiguities
+  for (auto& kv : uses) {
+    tg.uses.push_back(kv.second);
+  }
+  std::sort(tg.uses.begin(), tg.uses.end(), [](const ChannelUse& a, const ChannelUse& b){
+    return a.channel < b.channel;
+  });
+
+  for (auto& u : tg.uses) {
+    if (u.writers.size() != 1 || u.readers.size() != 1) {
+      tg.ambiguities.push_back(u);
     }
   }
 
-  return pg;
+  // Build edges:
+  // - If single writer/single reader: solid edge triple.
+  // - If ambiguous: dashed edges from all writers to channel node and from channel node to all readers
+  //   but stored as triples for printing convenience.
+  for (auto& u : tg.uses) {
+    const bool amb = (u.writers.size() != 1 || u.readers.size() != 1);
+
+    if (!amb) {
+      TopologyEdge e;
+      e.from_process = *u.writers.begin();
+      e.channel = u.channel;
+      e.to_process = *u.readers.begin();
+      e.dashed = false;
+      tg.edges.push_back(std::move(e));
+      continue;
+    }
+
+    // Dashed: emit all combinations writer->reader via channel as dashed triples.
+    // If writers or readers empty, still represent "dangling" ends with a note.
+    if (u.writers.empty() && u.readers.empty()) {
+      // nobody uses it; leave it out of edges (still in uses)
+      continue;
+    }
+    if (u.writers.empty()) {
+      for (auto& r : u.readers) {
+        TopologyEdge e;
+        e.from_process = "<none>";
+        e.channel = u.channel;
+        e.to_process = r;
+        e.dashed = true;
+        e.note = "no writers";
+        tg.edges.push_back(std::move(e));
+      }
+      continue;
+    }
+    if (u.readers.empty()) {
+      for (auto& w : u.writers) {
+        TopologyEdge e;
+        e.from_process = w;
+        e.channel = u.channel;
+        e.to_process = "<none>";
+        e.dashed = true;
+        e.note = "no readers";
+        tg.edges.push_back(std::move(e));
+      }
+      continue;
+    }
+
+    for (auto& w : u.writers) {
+      for (auto& r : u.readers) {
+        TopologyEdge e;
+        e.from_process = w;
+        e.channel = u.channel;
+        e.to_process = r;
+        e.dashed = true;
+        e.note = "ambiguous writers=" + join_set(u.writers) + " readers=" + join_set(u.readers);
+        tg.edges.push_back(std::move(e));
+      }
+    }
+  }
+
+  // sort edges for stable output
+  std::sort(tg.edges.begin(), tg.edges.end(), [](const TopologyEdge& a, const TopologyEdge& b){
+    if (a.channel != b.channel) return a.channel < b.channel;
+    if (a.from_process != b.from_process) return a.from_process < b.from_process;
+    if (a.to_process != b.to_process) return a.to_process < b.to_process;
+    return a.dashed < b.dashed;
+  });
+
+  return tg;
 }
 
-void dump_pipeline_graph_dot(std::ostream& os, const GroupDecl& g, const PipelineGraph& pg) {
-  os << "digraph pipeline_" << g.name << " {\n";
+void dump_topology_dot(std::ostream& os, const GroupDecl& g, const TopologyGraph& tg) {
+  os << "digraph caps_topology_" << g.name << " {\n";
   os << "  rankdir=LR;\n";
   os << "  node [shape=box];\n";
 
-  // Ensure all processes appear
+  // Process nodes
   for (auto& p : g.processes) {
     os << "  \"" << p.name << "\";\n";
   }
 
-  // Channel nodes + edges: P -> (channel) -> P
-  for (auto& e : pg.edges) {
+  // Channel nodes
+  for (auto& u : tg.uses) {
+    std::string chNode = "channel:" + u.channel;
+    os << "  \"" << chNode << "\" [shape=ellipse";
+    // If ambiguous, color/label-ish without forcing colors; keep minimal.
+    os << "];\n";
+  }
+
+  // Edges: represent as P -> channel and channel -> P (split)
+  for (auto& e : tg.edges) {
     std::string chNode = "channel:" + e.channel;
-    os << "  \"" << chNode << "\" [shape=ellipse];\n";
-    os << "  \"" << e.from_process << "\" -> \"" << chNode << "\";\n";
-    os << "  \"" << chNode << "\" -> \"" << e.to_process << "\";\n";
+
+    auto edge_attrs = [&](bool dashed, const std::string& label) -> std::string {
+      std::ostringstream a;
+      bool first = true;
+      a << " [";
+      if (dashed) { a << "style=dashed"; first = false; }
+      if (!label.empty()) {
+        if (!first) a << ",";
+        a << "label=\"" << label << "\"";
+      }
+      a << "]";
+      return a.str();
+    };
+
+    // from -> channel
+    if (e.from_process != "<none>") {
+      os << "  \"" << e.from_process << "\" -> \"" << chNode << "\""
+         << edge_attrs(e.dashed, "") << ";\n";
+    }
+
+    // channel -> to
+    if (e.to_process != "<none>") {
+      // Put the note on the channel->process edge so it shows up once per receiver
+      os << "  \"" << chNode << "\" -> \"" << e.to_process << "\""
+         << edge_attrs(e.dashed, e.note) << ";\n";
+    }
   }
 
   os << "}\n";
 }
 
+void dump_topology_text(std::ostream& os, const GroupDecl& g, const TopologyGraph& tg) {
+  os << "TOPOLOGY group " << g.name << "\n";
+  os << "processes:\n";
+  for (auto& p : g.processes) os << "  - " << p.name << "\n";
+
+  os << "channels:\n";
+  for (auto& c : g.channels) {
+    os << "  - " << c.name << " : channel<" << c.elem_type.name << ";" << c.capacity << ">\n";
+  }
+
+  os << "uses:\n";
+  for (auto& u : tg.uses) {
+    os << "  - " << u.channel
+       << " writers=" << join_set(u.writers)
+       << " readers=" << join_set(u.readers);
+    if (u.writers.size() != 1 || u.readers.size() != 1) os << "  [AMBIGUOUS]";
+    os << "\n";
+  }
+
+  os << "edges (Process -> Channel -> Process):\n";
+  for (auto& e : tg.edges) {
+    os << "  - " << e.from_process << " -> " << e.channel << " -> " << e.to_process;
+    if (e.dashed) os << "  (dashed/ambiguous)";
+    if (!e.note.empty()) os << "  note: " << e.note;
+    os << "\n";
+  }
+
+  os << "END_TOPOLOGY\n";
+}
+
 void PipelineChecker::check_group_pipeline_safe(const GroupDecl& g) {
   if (!has_ann(g.annotations, "pipeline_safe")) return;
 
-  // Map channel name -> {writers, readers}
-  struct Use { std::unordered_set<std::string> writers; std::unordered_set<std::string> readers; };
-  std::unordered_map<std::string, Use> uses;
-  for (auto& c : g.channels) uses[c.name] = Use{};
+  // Build uses
+  auto tg = build_topology_graph(g);
 
-  auto record_action = [&](const std::string& proc, const Action& a) {
-    if (a.kind == Action::Kind::Send) {
-      uses[a.chan].writers.insert(proc);
-    } else if (a.kind == Action::Kind::Receive) {
-      uses[a.chan].readers.insert(proc);
-    } else if (a.kind == Action::Kind::TrySend) {
-      uses[a.try_send_chan].writers.insert(proc);
-    } else if (a.kind == Action::Kind::TryReceive) {
-      uses[a.try_recv_chan].readers.insert(proc);
-    }
-  };
-
-  for (auto& p : g.processes) {
-    for (auto& ob : p.on_blocks) {
-      for (auto& a : ob.actions) record_action(p.name, a);
-      if (ob.transition.kind == Transition::Kind::IfElse) {
-        for (auto& a : ob.transition.then_actions) record_action(p.name, a);
-        for (auto& a : ob.transition.else_actions) record_action(p.name, a);
-      }
-    }
-  }
-
-  // Enforce single-writer/single-reader per channel
-  for (auto& [ch, u] : uses) {
+  // Enforce single writer/single reader strictly for @pipeline_safe
+  for (auto& u : tg.uses) {
     if (u.writers.size() != 1 || u.readers.size() != 1) {
-      diag.error(g.pos, "@pipeline_safe requires each channel to have exactly 1 writer and 1 reader: channel '" + ch + "'");
+      diag.error(g.pos, "@pipeline_safe requires each channel to have exactly 1 writer and 1 reader: channel '" + u.channel + "'");
     }
   }
+  if (diag.has_errors()) return;
 
-  // Build process dependency graph edges writer -> reader
+  // Build process adjacency (writer -> reader) for non-ambiguous channels
   std::unordered_map<std::string, std::vector<std::string>> adj;
   std::unordered_map<std::string, int> indeg;
   for (auto& p : g.processes) { adj[p.name] = {}; indeg[p.name] = 0; }
 
-  for (auto& [ch, u] : uses) {
-    if (u.writers.size() == 1 && u.readers.size() == 1) {
-      std::string w = *u.writers.begin();
-      std::string r = *u.readers.begin();
-      adj[w].push_back(r);
-      indeg[r]++;
-    }
+  for (auto& u : tg.uses) {
+    // safe now: exactly one writer/reader
+    std::string w = *u.writers.begin();
+    std::string r = *u.readers.begin();
+    adj[w].push_back(r);
+    indeg[r]++;
   }
 
-  // Kahn DAG check
+  // DAG check (Kahn)
   std::vector<std::string> q;
   q.reserve(indeg.size());
-  for (auto& [p, d] : indeg) if (d == 0) q.push_back(p);
+  for (auto& kv : indeg) if (kv.second == 0) q.push_back(kv.first);
 
   std::vector<std::string> topo;
   topo.reserve(indeg.size());
@@ -149,15 +275,16 @@ void PipelineChecker::check_group_pipeline_safe(const GroupDecl& g) {
     return;
   }
 
-  // Schedule respects topo order: step index must be non-decreasing along edges
+  // Schedule respects topo order
   std::unordered_map<std::string, int> step_index;
   for (int i = 0; i < (int)g.schedule.steps.size(); i++) step_index[g.schedule.steps[i]] = i;
 
-  for (auto& [from, outs] : adj) {
-    for (auto& to : outs) {
-      if (step_index.count(from) && step_index.count(to)) {
-        if (step_index[from] > step_index[to]) {
-          diag.error(g.schedule.pos, "@pipeline_safe schedule violates topo order: '" + from + "' must be before '" + to + "'");
+  for (auto& from : adj) {
+    for (auto& to : from.second) {
+      if (step_index.count(from.first) && step_index.count(to)) {
+        if (step_index[from.first] > step_index[to]) {
+          diag.error(g.schedule.pos,
+            "@pipeline_safe schedule violates topo order: '" + from.first + "' must be before '" + to + "'");
         }
       }
     }
