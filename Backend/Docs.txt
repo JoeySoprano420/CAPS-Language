@@ -126,3 +126,61 @@ caps::aot::compile_exe(cpp, "out.exe", /*optO2=*/true);
 
 *****
 
+How your front end should feed this AOT backend
+1) Produce caps::aot::Group (typed IR)
+
+From your existing sema/lowering, you likely already know:
+
+var -> Type
+
+expr -> Type
+
+channel element types, capacities
+
+state structure and transitions (with then/else action lists)
+
+So just map your internal AST/IR into the typed structs.
+
+2) Ensure ? is already lowered
+
+Your AOT emitter does not implement ? directly. It expects the lowered pattern:
+
+evaluate result into temp
+
+branch: if ok then assign value else assign __last_error and goto __Error
+
+__Error exists (terminal or loop)
+
+3) For try_receive type
+
+You must use the correct TypeKind:
+
+try_receive channel<i64> returns Result_i64_text
+
+try_receive channel<text> returns Result_text_text
+etc.
+
+Deterministic schedule loop semantics
+
+The emitted main() does exactly:
+
+For each tick:
+
+Steps processes in group.schedule order
+
+Each .step() executes one state’s actions + its transition
+
+If an action blocks (channel full/empty), the process returns early and stays in same state
+
+Terminates when:
+
+all processes finished == true → exit 0
+
+a full tick yields no progress → exit 2 (“Deadlock”)
+
+max ticks exceeded → exit 2
+
+That’s the “baked in deterministic schedule loop” you wanted.
+
+*****
+
