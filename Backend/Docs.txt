@@ -27,3 +27,84 @@ Deterministic blocking semantics, fixed schedule, deadlock detection
 Trace format (tick + process-step + channel buffers)
 
 --check-only is front end; backend provides clean exit signals (Completed, Deadlock)
+
+*****
+
+The ? desugaring contract (how backend expects it)
+
+You asked:
+
+? desugars to __Error
+
+preserve error payload automatically
+
+auto-write __last_error:text on ? failure
+
+carry then/else action lists
+
+✅ How to lower expr ? in your front end into this IR:
+
+Given:
+
+let x = safe_div(a,b) ?
+do something_with x
+
+
+Lower to:
+
+Assign __tmp = safe_div(a,b) (pure call or precomputed)
+
+In transition/branch actions:
+
+If __tmp.ok == true: set x = __tmp.value
+
+Else:
+
+__last_error = __tmp.error (text)
+
+__error_payload = __tmp or just error string (your choice)
+
+transition to __Error
+
+Because this backend already has:
+
+__last_error created in locals for every process
+
+Branch action lists executed before the transition target is applied
+
+So your lowered IR transition becomes:
+
+IfElse cond = (__tmp.ok)
+
+then_actions: Assign x = Field(__tmp,"value")
+
+else_actions: Assign __last_error = Field(__tmp,"error")
+
+then_state = <normal next>
+
+else_state = "__Error"
+
+Then define:
+
+state __Error
+on __Error { -> __Error } // terminal or self-loop
+
+
+Mark __Error as terminal if you want the process to end immediately.
+
+How to wire this into your CLI (minimal)
+
+Your CLI front end should:
+
+parse + sema + lower → IRProgram
+
+pick entry group by name (or first group)
+
+init_runtime(rt, group)
+
+TextTrace trace(std::cout) if you want logs
+
+run_group(rt, &trace)
+
+*****
+
