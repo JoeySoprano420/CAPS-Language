@@ -66,3 +66,7 @@ END_TOPOLOGY
 Dumps all pipeline-safe groups
 
 If you have multiple groups annotated @pipeline_safe, you’ll get one block per group (and one DOT graph per group).
+
+*****
+
+
