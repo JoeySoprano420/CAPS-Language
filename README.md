@@ -344,3 +344,277 @@ That upgrade moves CAPS from:
 ---
 
 
+# CAPS-Language Installation and Usage Guide
+
+This guide provides step-by-step instructions for downloading, setting up, installing, and using CAPS-Language—a deterministic, compile-time verified language for building concurrent systems with strong safety guarantees.
+
+---
+
+## Table of Contents
+1. [Prerequisites](#prerequisites)
+2. [Downloading CAPS-Language](#downloading-caps-language)
+3. [Setting Up the Environment](#setting-up-the-environment)
+4. [Installing (Building) the Compiler](#installing-building-the-compiler)
+5. [Verifying Installation](#verifying-installation)
+6. [Writing Your First CAPS Program](#writing-your-first-caps-program)
+7. [Compiling and Running Programs](#compiling-and-running-programs)
+8. [Using Advanced Features](#using-advanced-features)
+9. [Troubleshooting](#troubleshooting)
+10. [Resources and Next Steps](#resources-and-next-steps)
+
+---
+
+## 1. Prerequisites
+
+Before installing CAPS-Language, ensure your system meets these requirements:
+
+- **Operating System**: 
+  - Windows 10/11 (recommended for MSVC support).
+  - Linux (Ubuntu/Debian) or macOS (with adjustments for toolchains).
+- **Hardware**: 
+  - At least 2GB RAM, 1GB free disk space.
+- **Software**:
+  - **Git**: For cloning the repository.
+  - **CMake**: Version 3.15 or later (for building).
+  - **C++ Compiler**: 
+    - MSVC (Visual Studio 2019/2022) on Windows.
+    - GCC/Clang on Linux/macOS (may require adjustments for MSVC-specific code).
+  - **Linker**: lld-link (comes with LLVM) for advanced backends.
+  - **Optional**: Graphviz (for topology visualization), Visual Studio (for debugging).
+
+**Note**: CAPS is primarily developed on Windows with MSVC. Cross-platform support is experimental.
+
+---
+
+## 2. Downloading CAPS-Language
+
+CAPS-Language is hosted on GitHub. Download the source code using Git:
+
+1. **Open a Terminal/Command Prompt**:
+   - On Windows: Use Command Prompt, PowerShell, or Git Bash.
+   - On Linux/macOS: Use your preferred terminal.
+
+2. **Clone the Repository**:
+   ```
+   git clone https://github.com/JoeySoprano420/CAPS-Language.git
+   cd CAPS-Language
+   ```
+
+3. **Verify Contents**:
+   - The repository contains source code in `src/`, examples in `demo/`, and documentation (`README.md`, `HOWTO.md`, `License.md`).
+
+If you prefer a ZIP download, visit the [GitHub repository](https://github.com/JoeySoprano420/CAPS-Language) and click "Code" > "Download ZIP". Extract it to a folder.
+
+---
+
+## 3. Setting Up the Environment
+
+### On Windows (Recommended)
+1. **Install Visual Studio**:
+   - Download and install Visual Studio 2022 (Community Edition is free).
+   - During installation, select "Desktop development with C++" workload.
+   - This provides MSVC, CMake, and build tools.
+
+2. **Install Git**:
+   - Download from [git-scm.com](https://git-scm.com) if not already installed.
+
+3. **Optional: Install LLVM for lld-link**:
+   - Download LLVM from [llvm.org](https://llvm.org) and add `bin/` to your PATH for advanced linking.
+
+### On Linux (Ubuntu/Debian)
+1. **Install Dependencies**:
+   ```
+   sudo apt update
+   sudo apt install build-essential cmake git clang
+   ```
+
+2. **Install MSVC (Optional, for compatibility)**:
+   - Use Wine or cross-compilation tools, but native GCC/Clang may work with modifications.
+
+### On macOS
+1. **Install Xcode**:
+   - Download from the Mac App Store for command-line tools.
+
+2. **Install Homebrew**:
+   ```
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+
+3. **Install Dependencies**:
+   ```
+   brew install cmake git llvm
+   ```
+
+**Environment Variables**:
+- Ensure `cl.exe` (MSVC) or `g++` is in your PATH.
+- Add CMake to PATH if not automatic.
+
+---
+
+## 4. Installing (Building) the Compiler
+
+CAPS uses CMake for building. Follow these steps:
+
+1. **Navigate to the Project Directory**:
+   ```
+   cd CAPS-Language
+   ```
+
+2. **Create a Build Directory**:
+   ```
+   mkdir build
+   cd build
+   ```
+
+3. **Configure with CMake**:
+   ```
+   cmake ..
+   ```
+   - On Windows: This detects MSVC automatically.
+   - On Linux/macOS: Specify compiler if needed: `cmake -DCMAKE_CXX_COMPILER=clang++ ..`
+
+4. **Build the Project**:
+   ```
+   cmake --build . --config Release
+   ```
+   - This compiles the `caps_frontend` executable.
+
+5. **Install (Optional)**:
+   - On Unix-like systems: `sudo make install` (if configured).
+   - On Windows: Copy `caps_frontend.exe` to a directory in your PATH (e.g., `C:\bin\`).
+
+**Expected Output**: A `caps_frontend.exe` (or `caps_frontend` on Unix) in the `build/` directory.
+
+**Build Time**: ~1-5 minutes depending on your system.
+
+---
+
+## 5. Verifying Installation
+
+1. **Run the Compiler**:
+   ```
+   ./caps_frontend --help
+   ```
+   - You should see the usage message listing all options.
+
+2. **Test with an Example**:
+   ```
+   ./caps_frontend --check-only demo/demo.caps
+   ```
+   - Should exit with code 0 (success) if no errors.
+
+If you encounter issues, see [Troubleshooting](#troubleshooting).
+
+---
+
+## 6. Writing Your First CAPS Program
+
+CAPS programs define concurrent processes with explicit state machines and channels.
+
+### Basic Structure
+Create a file `hello.caps`:
+```
+module hello
+
+@pipeline_safe
+group Demo {
+  channel<int; 10> chan
+
+  process Producer(limit:int) -> () {
+    state Start, Send, Done
+    var i:int = 1
+
+    on Start { -> Send }
+    on Send {
+      do send i -> chan
+      if i == limit { -> Done } else { do i = i + 1; -> Send }
+    }
+    on Done { -> Done }
+  }
+
+  process Consumer(count:int) -> (sum:int) {
+    state Start, Receive, Finished
+    var total:int = 0
+    var received:int = 0
+
+    on Start { -> Receive }
+    on Receive {
+      do rr = try_receive chan
+      do value:int = rr?
+      do total = total + value
+      do received = received + 1
+      if received == count { -> Finished } else { -> Receive }
+    }
+    on Finished { do sum = total; -> Finished }
+  }
+
+  schedule { step Producer; step Consumer; repeat }
+}
+```
+
+This program sends numbers 1-10 and sums them deterministically.
+
+**Key Concepts**:
+- **Modules/Groups**: Organize code.
+- **Processes**: FSMs with states and transitions.
+- **Channels**: Bounded communication.
+- **Schedule**: Explicit execution order.
+
+---
+
+## 7. Compiling and Running Programs
+
+### Using the C++ Backend (Easiest)
+1. **Compile to C++ and Executable**:
+   ```
+   ./caps_frontend --emit-cpp=generated --compile hello.caps
+   ```
+   - Generates `generated/Demo.cpp` and compiles to `Demo.exe`.
+
+2. **Run**:
+   ```
+   ./Demo.exe
+   ```
+   - Runs silently; producer sends 1-10, consumer sums to 55.
+
+### Using the x86-64 Backend (Advanced)
+1. **Emit Assembly**:
+   ```
+   ./caps_frontend --emit-asm=output.asm hello.caps
+   ```
+
+2. **Emit Object File**:
+   ```
+   ./caps_frontend --emit-obj=output.obj hello.caps
+   ```
+
+3. **Link Manually**:
+   ```
+   lld-link output.obj kernel32.lib /subsystem:console /entry:caps_entry /debug:full /pdb:output.pdb
+   ./output.exe
+   ```
+
+### Other Useful Commands
+- **Typecheck Only**: `./caps_frontend --check-only hello.caps`
+- **Dump AST**: `./caps_frontend --dump-ast hello.caps`
+- **Visualize Topology**: `./caps_frontend --dump-topology=dot hello.caps > topo.dot` (requires Graphviz: `dot -Tpng topo.dot -o topo.png`)
+
+---
+
+## 8. Using Advanced Features
+
+### Annotations
+- `@pipeline_safe`: Enforces acyclic data flow.
+- `@realtimesafe`: Disallows blocking operations.
+- `@max_sends(chan, 100)`: Bounds sends.
+
+### Debugging
+- Use `--dump-topology=text` for text-based graphs.
+- Compile with debug info for Visual Studio stepping.
+
+### Custom Expressions and Types
+- Support for `int`, `bool`, `real`, `text`, `Result<T,E>`.
+
+- *****
+
+- 
