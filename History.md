@@ -11,7 +11,7 @@ They hand‑rolled state machines in C. They built ring buffers from scratch. Th
 
 But hope is not a concurrency model.
 
-The idea behind CAPS emerged from that tension — the realization that correctness shouldn’t depend on timing, luck, or the mercy of a scheduler. If a system has states, those states should be explicit. If it passes messages, those messages should be typed and bounded. If it runs concurrently, the schedule should be part of the program, not a hidden runtime decision.
+The idea behind CAPS emerged from that tension — the realization that correctness shouldn’t depend on timing, hits-or-misses, or the mercy of a scheduler. If a system has states, those states should be explicit. If it passes messages, those messages should be typed and bounded. If it runs concurrently, the schedule should be part of the program, not a hidden runtime decision.
 
 CAPS grew from the belief that determinism isn’t a luxury.
 It’s a foundation.
