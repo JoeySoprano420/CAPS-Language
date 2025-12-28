@@ -1,8 +1,6 @@
 # CAPS-Language
 Computational Algorithmic Programming Sequence Language
 
-
-
 ---
 
 ## 1. What CAPS Does **So Far** (With the Upgrade Included)
@@ -343,6 +341,254 @@ That upgrade moves CAPS from:
 
 ---
 
+CAPS is a custom programming language designed for modeling and executing deterministic concurrent systems, inspired by CSP (Communicating Sequential Processes) and Go's goroutines/channels, but with strong static guarantees for safety, deadlock freedom, and performance. It emphasizes compile-time verification of process interactions, bounded communication, and analyzable topologies.
+
+The project implements a full compiler toolchain: **CAPS source → Typed IR → Native Executable**, with multiple backends (C++ AOT and direct x86-64 codegen). It's built for "serious compiler bootstrap" — owning the semantics while leveraging industrial tools for codegen.
+
+---
+
+## 1. Language Design Philosophy
+
+CAPS is not a general-purpose language but a domain-specific one for **unfolding concurrent computations**:
+- **Determinism**: No hidden nondeterminism; schedules are explicit and verifiable.
+- **Bounded Resources**: Channels have fixed capacities; processes have finite states.
+- **Static Safety**: Compile-time checks for deadlocks, race conditions, and topology violations.
+- **Performance**: Compiles to native code with no runtime VM or garbage collection.
+- **Debuggability**: Full source-level debugging support via CodeView and unwind info.
+
+Key influences:
+- CSP for process algebra and communication.
+- State machines for process behavior.
+- Annotations for domain-specific constraints (e.g., real-time safety).
+
+---
+
+## 2. Core Language Syntax
+
+CAPS programs are organized into **modules** containing **groups**. Each group defines processes, channels, and a schedule.
+
+### 2.1 Top-Level Structure
+```
+module <name>
+
+@pipeline_safe
+@realtimesafe
+group <GroupName> {
+  channel<int; 1024> my_channel  // bounded channel
+
+  process Producer(limit:int) -> () {
+    state Start, Send, Done, __Error
+    var current:int = 1
+
+    on Start { -> Send }
+    on Send {
+      do send current -> my_channel
+      if current == limit { -> Done } else { do current = current + 1; -> Send }
+    }
+    on Done { -> Done }
+    on __Error { -> __Error }
+  }
+
+  process Consumer(count:int) -> (sum:int) {
+    state Start, Receive, Finished, __Error
+    var total:int = 0
+    var received:int = 0
+
+    on Start { -> Receive }
+    on Receive {
+      do rr = try_receive my_channel
+      do value:int = rr?  // ? desugars to error handling
+      do total = total + value
+      do received = received + 1
+      if received == count { -> Finished } else { -> Receive }
+    }
+    on Finished { do sum = total; -> Finished }
+    on __Error { -> __Error }
+  }
+
+  schedule { step Producer; step Consumer; repeat }
+}
+```
+
+### 2.2 Key Constructs
+
+#### Modules and Groups
+- **Module**: Top-level container (e.g., `module demo`).
+- **Group**: Isolated execution unit with channels, processes, and schedule. Groups can have annotations.
+
+#### Channels
+- Declaration: `channel<T; N> name` (e.g., `channel<int; 1024> c`).
+- Operations: `send expr -> chan`, `receive chan -> var`, `try_send`, `try_receive`.
+- Semantics: Rendezvous or buffered; blocking/non-blocking variants.
+
+#### Processes
+- Signature: `process Name(inputs) -> (outputs) { ... }`
+- States: Declared explicitly (e.g., `state Start, Send`).
+- Locals: `var/let name:T = expr`
+- On-blocks: `on State { actions; transition }`
+- Transitions: `-> State` or `if cond { then_actions; -> ThenState } else { else_actions; -> ElseState }`
+
+#### Expressions
+- Literals: `int`, `real`, `text`, `bool`
+- Operators: Arithmetic (`+`, `-`, `*`, `/`), comparisons (`==`, `!=`, `<`, etc.), logical (`&&`, `||`)
+- Calls: `len(channel)` (builtin)
+- Result handling: `expr?` for error propagation (desugars to `__Error` state)
+
+#### Annotations
+- `@pipeline_safe`: Enforces acyclic topology and schedule consistency.
+- `@realtimesafe`: Disallows blocking ops; enables bounded-time analysis.
+- `@max_sends(chan, limit)`, `@max_receives(chan, limit)`: Static bounds.
+
+#### Types
+- Primitives: `int`, `bool`, `real`, `text`
+- Composites: `Result<T, E>` (e.g., `Result<int, text>` for try ops)
+- Channels: `channel<T; N>`
+
+---
+
+## 3. Semantics and Execution Model
+
+### 3.1 Process Model
+- Each process is a finite state machine (FSM) with explicit states and transitions.
+- Execution is **deterministic interleaving** via a fixed schedule (e.g., round-robin).
+- No preemption; processes yield control explicitly via transitions.
+- Error handling: `?` propagates failures to `__Error` state with `__last_error:text`.
+
+### 3.2 Communication
+- Channels are typed and bounded (ring buffers).
+- Blocking: `send`/`receive` wait if full/empty.
+- Non-blocking: `try_send`/`try_receive` return `Result<bool/text>` or `Result<T,text>`.
+
+### 3.3 Scheduling
+- Explicit schedule in group: `schedule { step P1; step P2; repeat }`
+- Each "tick": Run one step per process in order.
+- Termination: When all processes are in terminal states and channels are empty.
+
+### 3.4 Safety Guarantees
+- **Total Transitions**: Every state has a complete transition (parser-enforced).
+- **Type Safety**: Strict typing; no implicit conversions.
+- **Topology Analysis**: `@pipeline_safe` builds process-channel graph, checks acyclicity, and validates schedule respects data flow.
+- **Real-Time Bounds**: `@realtimesafe` ensures no unbounded waits.
+- **Bound Checks**: Static limits on sends/receives.
+
+---
+
+## 4. Compiler Architecture
+
+The compiler is a **hybrid frontend/backend** design:
+- **Frontend (Owned)**: Parses, typechecks, enforces CAPS rules, lowers to Typed IR.
+- **Backend (Borrowed)**: Emits native code via industrial tools.
+
+### 4.1 Pipeline Stages
+
+1. **Lexing/Parsing**: Tokenize → AST (recursive descent parser).
+2. **Name Resolution**: Build symbol tables (modules, groups, processes, channels).
+3. **Type Checking**: Infer/check types; enforce channel/process scoping.
+4. **Well-Formedness**: Validate FSMs, transitions, annotations.
+5. **Annotation Enforcement**: Topology graphs, cycle detection, schedule validation.
+6. **IR Lowering**: AST → Typed IR (desugar `?`, normalize transitions).
+7. **Backend Selection**: Typed IR → C++ (AOT) or x86-64 (direct).
+8. **Codegen**: Emit .cpp/.exe or .asm/.obj with unwind/debug info.
+9. **Linking**: MSVC/lld-link to PE .exe.
+
+### 4.2 Key Components
+
+#### Frontend
+- **Lexer** (`src/lexer/`): Recognizes keywords, tokens, spans.
+- **Parser** (`src/parser/`): Builds AST; enforces syntax (e.g., total transitions).
+- **Sema** (`src/sema/`): Type checking, scoping, annotation validation.
+- **IR Lowering** (`src/ir/`): AST → Typed IR; constant folding, error desugaring.
+
+#### Backend A: C++ AOT (`src/aot/`)
+- Typed IR → C++ structs/functions.
+- Channels as ring buffers; processes as switch(state).
+- Compiles with MSVC `/O2` to .exe.
+
+#### Backend B: x86-64 Direct (`src/x64/`)
+- Typed IR → x86-64 instructions (Milestones 3-6).
+- Emits .asm or .obj with COFF format.
+- Includes timers (`GetTickCount64`), unwind (.pdata/.xdata), debug (.debug$S/.debug$T).
+
+#### Utilities
+- **Analysis** (`src/analysis/`): Pipeline topology, graph algorithms.
+- **Pretty** (`src/pretty/`): AST/IR dumping.
+- **Backend** (`src/backend/`): Runtime evaluation (for interpretation/testing).
+
+---
+
+## 5. Backends and Milestones
+
+### 5.1 C++ AOT Backend
+- Generates readable C++ with deterministic scheduler.
+- Suitable for prototyping and cross-platform.
+- Command: `--emit-cpp=<dir> --compile`
+
+### 5.2 x86-64 Direct Backend (Advanced)
+- **Milestone 3**: Basic scheduler + channels; .text functions with fixups/relocs.
+- **Milestone 4**: Add timers; 64-bit ops; locked .text layout.
+- **Milestone 5**: Windows unwind info (.pdata/.xdata) for exceptions/debugging.
+- **Milestone 6**: CodeView debug info (.debug$S/.debug$T) for source-level stepping.
+- Commands: `--emit-asm=<file>`, `--emit-obj=<file>`
+- Verification passes ensure fixup/reloc correctness.
+
+Both backends produce native .exe with no interpreter overhead.
+
+---
+
+## 6. Example Program
+
+See `demo/demo.caps`:
+- Producer sends numbers 1..100000 to channel.
+- Consumer receives, sums, and terminates.
+- `@pipeline_safe` ensures no deadlocks; schedule respects producer→consumer flow.
+
+Compile: `caps_frontend --emit-cpp=generated --compile demo.caps`
+Run: `./Demo.exe`
+
+---
+
+## 7. Current Status and Features
+
+### Implemented
+- Full frontend: Parsing, typechecking, IR lowering.
+- C++ AOT backend: Working .exe generation.
+- x86-64 backend foundation: Headers and placeholders for direct codegen.
+- Annotations: `@pipeline_safe`, `@realtimesafe`, bounds checking.
+- Error handling: `Result + ?` with desugaring.
+- Optimizations: Constant folding, security checks (e.g., division by zero, file size limits).
+- Debug support: AST/IR dumps, topology visualization.
+
+### In Progress
+- Complete x86-64 codegen implementation (Milestones 3-6).
+- Verification passes for fixups/relocs.
+
+### Future
+- LLVM backend for cross-platform.
+- More builtins (e.g., time functions).
+- IDE integration (syntax highlighting, etc.).
+
+---
+
+## 8. Usage and Commands
+
+```
+caps_frontend [options] <file.caps>
+
+Options:
+  --dump-ast                    Print AST
+  --dump-topology=dot|text      Print pipeline topology
+  --check-only                  Typecheck only
+  --output-ir=<file>            Write IR to file
+  --emit-cpp=<dir>              Emit C++ to <dir>/<group>.cpp
+  --compile                     Compile C++ to .exe
+  --emit-asm=<file>             Emit x86-64 assembly
+  --emit-obj=<file>             Emit COFF .obj file
+```
+
+The project is licensed under S.U.E.T. (Sovereign Universal Entity Technical) License v1.0, emphasizing attribution and identity integrity.
+
+This overview captures the entire CAPS-Language as implemented, providing a foundation for concurrent programming with provable properties. For details, see source files or run the compiler with `--help`.
+
 
 # CAPS-Language Installation and Usage Guide
 
@@ -368,15 +614,15 @@ This guide provides step-by-step instructions for downloading, setting up, insta
 
 Before installing CAPS-Language, ensure your system meets these requirements:
 
-- **Operating System**: 
+- **Operating System**:
   - Windows 10/11 (recommended for MSVC support).
   - Linux (Ubuntu/Debian) or macOS (with adjustments for toolchains).
-- **Hardware**: 
+- **Hardware**:
   - At least 2GB RAM, 1GB free disk space.
 - **Software**:
   - **Git**: For cloning the repository.
   - **CMake**: Version 3.15 or later (for building).
-  - **C++ Compiler**: 
+  - **C++ Compiler**:
     - MSVC (Visual Studio 2019/2022) on Windows.
     - GCC/Clang on Linux/macOS (may require adjustments for MSVC-specific code).
   - **Linker**: lld-link (comes with LLVM) for advanced backends.
@@ -615,6 +861,42 @@ This program sends numbers 1-10 and sums them deterministically.
 ### Custom Expressions and Types
 - Support for `int`, `bool`, `real`, `text`, `Result<T,E>`.
 
-- *****
+---
 
-- 
+## 9. Troubleshooting
+
+### Common Build Issues
+- **CMake Not Found**: Install CMake from [cmake.org](https://cmake.org).
+- **MSVC Errors**: Ensure Visual Studio is installed and `cl.exe` is in PATH.
+- **Linker Errors**: For x86-64, install LLVM and use `lld-link`.
+
+### Runtime Issues
+- **Program Crashes**: Check for invalid operations (e.g., division by zero).
+- **No Output**: CAPS programs run deterministically; add debugging if needed.
+
+### Compiler Errors
+- **Syntax Errors**: Ensure total transitions in FSMs.
+- **Type Mismatches**: Verify channel types and scoping.
+- **Topology Warnings**: Fix cycles or ambiguous channels.
+
+### Getting Help
+- Check `README.md` and `HOWTO.md` for details.
+- Open issues on [GitHub](https://github.com/JoeySoprano420/CAPS-Language).
+- License: S.U.E.T. v1.0 (see `License.md`).
+
+---
+
+## 10. Resources and Next Steps
+
+- **Documentation**: `README.md` (full overview), `HOWTO.md` (detailed guide).
+- **Examples**: `demo/demo.caps`.
+- **Contributing**: Extend backends or add features.
+- **Community**: Join discussions on GitHub.
+
+CAPS-Language enables building **provably correct concurrent systems**. Start with simple programs and explore advanced features. Happy coding! 🜲
+
+---
+
+*This guide is for CAPS-Language v1.0. For updates, visit the [GitHub repository](https://github.com/JoeySoprano420/CAPS-Language).*
+
+
