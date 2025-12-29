@@ -1,0 +1,8 @@
+caps/
+  src/
+    aot/
+      aot_ir_typed.h
+      aot_codegen.h
+      aot_codegen.cpp
+      aot_toolchain.h
+      aot_toolchain.cpp
