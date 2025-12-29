@@ -1,0 +1,95 @@
+﻿# CAPS-Language Tutorials
+
+Welcome to the CAPS-Language tutorials! These step-by-step guides will help you learn CAPS from basics to advanced topics.
+
+## Table of Contents
+1. [Getting Started](#getting-started)
+2. [Your First Process](#your-first-process)
+3. [Channels and Communication](#channels-and-communication)
+4. [Annotations and Guarantees](#annotations-and-guarantees)
+5. [Advanced FSMs](#advanced-fsms)
+6. [Debugging and Tools](#debugging-and-tools)
+7. [Advanced Static Analyses](#advanced-static-analyses)
+8. [New Language Features](#new-language-features)
+9. [Enhanced Channels](#enhanced-channels)
+10. [Compiler Optimizations](#compiler-optimizations)
+11. [Clean Type System](#clean-type-system)
+
+## Getting Started
+
+### Prerequisites
+- Install CAPS compiler (see HOWTO.md)
+- Basic programming knowledge
+
+### Hello World
+Create `hello.caps`:
+```
+module hello
+
+group Main {
+  process Hello -> () {
+    state Start
+    on Start { -> Start }  // Infinite loop
+  }
+
+  schedule { step Hello; repeat }
+}
+```
+
+Compile: `caps_frontend --emit-cpp=gen --compile hello.caps`
+
+This creates a simple program that runs forever.
+
+## Your First Process
+
+Learn to define processes with states and transitions.
+
+[Full tutorial content here...]
+
+## Channels and Communication
+
+Master typed channels for safe communication.
+
+[Full tutorial content here...]
+
+## Annotations and Guarantees
+
+Use annotations for compile-time safety.
+
+[Full tutorial content here...]
+
+## Advanced FSMs
+
+Build complex state machines.
+
+[Full tutorial content here...]
+
+## Debugging and Tools
+
+Use the debugger, linter, and formatter.
+
+[Full tutorial content here...]
+
+## Advanced Static Analyses
+
+Explore advanced static analysis techniques.
+
+[Full tutorial content here...]
+
+## New Language Features
+
+Discover the latest features of the CAPS language.
+
+[Full tutorial content here...]
+
+## Enhanced Channels
+
+[Full tutorial content here...]
+
+## Compiler Optimizations
+
+[Full tutorial content here...]
+
+## Clean Type System
+
+[Full tutorial content here...]

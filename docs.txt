@@ -1,0 +1,26 @@
+How to build and run (Visual Studio)
+
+Open Visual Studio → Open a local folder → select caps/
+
+VS detects CMakeLists.txt
+
+Build caps_frontend
+
+Run:
+
+caps_frontend demo/demo.caps
+
+
+It should print an IR summary where:
+
+transitions carry then/else action lists
+
+rr? becomes TryUnwrapAssign ... on_fail state=__Error write __last_error
+
+Notes (so you don’t get surprised)
+
+This is a front end: it does not execute programs.
+
+It enforces the rules you asked for at parse+sema time.
+
+It’s intentionally strict: total transitions require else, and ? is banned in transition conditions.

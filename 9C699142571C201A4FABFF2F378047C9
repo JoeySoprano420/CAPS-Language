@@ -1,0 +1,33 @@
+﻿#pragma once
+#include "ast/ast.h"
+#include "util/diag.h"
+#include "sema/types.h"
+
+struct Sema {
+  Sema(Diag& d);
+
+  void check(Program& p);
+
+private:
+  Diag& diag;
+
+  struct GroupEnv {
+    std::unordered_map<std::string, Type> channels; // channel name -> channel type
+    std::unordered_map<std::string, ProcessDecl*> processes;
+  };
+
+  void check_group(GroupDecl& g);
+  void check_process(GroupDecl& g, GroupEnv& env, ProcessDecl& p);
+
+  Type check_expr(GroupEnv& env, ProcessDecl& p, std::unordered_map<std::string, Type>& locals, Expr& e);
+
+  void check_action(GroupDecl& g, GroupEnv& env, ProcessDecl& p,
+                    std::unordered_map<std::string, Type>& locals,
+                    Action& a, bool realtime_safe);
+
+  void check_transition(GroupDecl& g, GroupEnv& env, ProcessDecl& p,
+                        std::unordered_map<std::string, Type>& locals,
+                        Transition& tr, bool realtime_safe);
+
+  bool has_annotation(const std::vector<Annotation>& anns, const std::string& name) const;
+};

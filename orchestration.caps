@@ -1,0 +1,24 @@
+// CAPS Stdlib: Concurrency Orchestration
+// Tools for managing concurrent processes.
+
+module std.orchestration;
+
+pub fn spawn_process(proc: Process) -> ProcessId {
+  // Spawn process
+  0  // Placeholder
+}
+
+pub fn join_process(id: ProcessId) {
+  // Join process
+}
+
+pub fn monitor_process(id: ProcessId) -> ProcessStatus {
+  // Monitor status
+  ProcessStatus::Running  // Placeholder
+}
+
+pub enum ProcessStatus {
+  Running,
+  Finished,
+  Error
+}

@@ -1,0 +1,223 @@
+#pragma once
+#include <string>
+#include <vector>
+#include <optional>
+#include <variant>
+#include <unordered_map>
+#include "util/diag.h"
+
+struct TypeRef {
+  std::string name; // "int", "text", "Result", user types
+  std::vector<TypeRef> args; // generics
+  bool is_channel = false;
+  int channel_capacity = -1; // for channel<T;N>
+
+  static TypeRef named(const std::string& n) { return TypeRef{n}; }
+};
+
+struct Expr {
+  enum class Kind {
+    Ident,
+    IntLit,
+    RealLit,
+    TextLit,
+    Binary,
+    Call,
+    Try, // postfix ?
+  } kind = Kind::Ident;
+
+  SourcePos pos;
+  std::string text; // ident or literal or operator for Binary
+  std::vector<Expr> args; // Binary: [lhs,rhs], Call: [callee,args...], Try: [operand]
+
+  // filled by sema
+  TypeRef inferred_type;
+
+  static Expr ident(SourcePos p, const std::string& n) { Expr e; e.kind=Kind::Ident; e.pos=p; e.text=n; return e; }
+  static Expr text_literal(SourcePos p, const std::string& s) { Expr e; e.kind=Kind::TextLit; e.pos=p; e.text=s; return e; }
+};
+
+struct Stmt {
+  enum class Kind { Let, Var, Assign, Return, ExprStmt } kind = Kind::ExprStmt;
+  SourcePos pos;
+  std::string name;     // let/var/assign target
+  std::optional<TypeRef> explicit_type;
+  Expr expr;            // initializer or rhs
+};
+
+struct Action {
+  enum class Kind { DoStmt, Send, Receive, TrySend, TryReceive } kind = Kind::DoStmt;
+  SourcePos pos;
+
+  // DoStmt
+  Stmt stmt;
+
+  // Send
+  Expr send_expr;
+  std::string chan;
+
+  // Receive
+  std::string recv_target;
+  bool recv_declares = false;
+  std::optional<TypeRef> recv_type;
+
+  // TrySend
+  Expr try_send_expr;
+  std::string try_send_chan;
+  std::string try_send_outvar;
+
+  // TryReceive
+  std::string try_recv_chan;
+  std::string try_recv_outvar;
+};
+
+struct Transition {
+  enum class Kind { Unconditional, IfElse } kind = Kind::Unconditional;
+  SourcePos pos;
+
+  // unconditional
+  std::string to_state;
+
+  // IfElse
+  Expr cond;
+  std::vector<Action> then_actions;
+  std::vector<Action> else_actions;
+  std::string then_state;
+  std::string else_state;
+};
+
+struct OnBlock {
+  SourcePos pos;
+  std::string state_name;
+  std::vector<Action> actions;
+  Transition transition;
+};
+
+struct Param {
+  std::string name;
+  TypeRef type;
+  SourcePos pos;
+};
+
+struct Annotation {
+  std::string name;           // pipeline_safe, realtimesafe, max_sends, max_receives
+  SourcePos pos;
+  std::vector<std::string> args; // raw tokens inside (...)
+};
+
+struct ChannelDecl {
+  SourcePos pos;
+  std::string name;
+  TypeRef elem_type;
+  int capacity = 0; // channel<T> => 0, channel<T;N> => N
+};
+
+struct ProcessDecl {
+  SourcePos pos;
+  std::string name;
+  std::vector<Annotation> annotations;
+  std::vector<Param> inputs;
+  std::vector<Param> outputs;
+
+  std::vector<std::string> states;
+  std::vector<Stmt> locals;
+  std::vector<OnBlock> on_blocks;
+};
+
+struct ScheduleDecl {
+  SourcePos pos;
+  std::vector<std::string> steps; // process names
+  bool repeat = false;
+};
+
+struct GroupDecl {
+  SourcePos pos;
+  std::string name;
+  std::vector<Annotation> annotations;
+  std::vector<ChannelDecl> channels;
+  std::vector<ProcessDecl> processes;
+  ScheduleDecl schedule;
+};
+
+struct ModuleDecl {
+  SourcePos pos;
+  std::string name;
+};
+
+struct Program {
+  ModuleDecl module;
+  std::vector<GroupDecl> groups;
+};
+
+// AST nodes for new features
+struct MatchExpr {
+  std::unique_ptr<Expr> scrutinee;
+  std::vector<MatchArm> arms;
+};
+
+struct MatchArm {
+  Pattern pattern;
+  std::optional<std::unique_ptr<Expr>> guard;  // if condition
+  std::unique_ptr<Expr> body;
+};
+
+struct Pattern {
+  // Variants: wildcard, literal, variable, struct, etc.
+  enum Kind { Wildcard, Literal, Variable, Struct } kind;
+  // Fields based on kind
+};
+
+struct ArrayType {
+  std::unique_ptr<Type> elem_type;
+  size_t size;  // Compile-time constant
+};
+
+struct ArrayExpr {
+  std::vector<std::unique_ptr<Expr>> elements;
+};
+
+struct ForLoop {
+  std::string var;
+  std::unique_ptr<Expr> start;
+  std::unique_ptr<Expr> end;  // Must be compile-time
+  std::vector<std::unique_ptr<Stmt>> body;
+};
+
+struct ConstFnDecl {
+  std::string name;
+  std::vector<Param> params;
+  std::unique_ptr<Type> ret_type;
+  std::vector<std::unique_ptr<Stmt>> body;
+};
+
+// Enhanced AST for clean, deterministic type system
+// Added: Generics, dependent types, refinement types, union types
+
+struct GenericType {
+  std::string base;
+  std::vector<Type> params;
+};
+
+struct DependentType {
+  Type base;
+  Expr condition;  // e.g., {int | x > 0}
+};
+
+struct RefinementType {
+  Type base;
+  Expr predicate;
+};
+
+struct UnionType {
+  std::vector<Type> variants;
+};
+
+struct EnumType {
+  std::string name;
+  std::vector<std::string> variants;
+};
+
+struct StructType {
+  std::string name;
+  std::vector<std::pair<std::string, Type>> fields;
+};

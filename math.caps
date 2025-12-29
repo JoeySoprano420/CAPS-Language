@@ -1,0 +1,22 @@
+// CAPS Stdlib: Math
+// Mathematical utilities.
+
+module std.math;
+
+pub const PI: real = 3.141592653589793;
+pub const E: real = 2.718281828459045;
+
+pub fn sin(x: real) -> real {
+  // Implementation
+  x  // Placeholder
+}
+
+pub fn cos(x: real) -> real {
+  // Implementation
+  x  // Placeholder
+}
+
+pub fn sqrt(x: real) -> real {
+  // Implementation
+  x  // Placeholder
+}

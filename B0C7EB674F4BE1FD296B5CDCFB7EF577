@@ -1,0 +1,55 @@
+﻿// CAPS-Language Demo Program
+// This example demonstrates deterministic processes, typed channels with ownership transfer,
+// no shared memory, and compile-time guarantees in action.
+// Now showcases richer type system, better error messages, more static analysis,
+// more guarantees, more compile-time proofs, and more optimizations.
+
+module demo
+
+@pipeline_safe
+@no_deadlock  // New: Proves no deadlocks
+@realtime_bounded  // New: Ensures bounded time
+group Demo {
+  channel<int; 1024> chan
+
+  // Richer types: struct and enum
+  struct Data { value:int, tag:enum Tag { Num, Str } }
+  channel<Data; 10> rich_chan
+
+  process Producer(limit:int) -> () {
+    state Start, Send, Done
+    var i:int = 1
+
+    on Start { -> Send }
+    on Send {
+      // Ownership transfer
+      do send i -> chan
+      // Richer: send struct
+      do data:Data = {value: i, tag: Num}
+      do send data -> rich_chan  // Ownership moves
+      if i == limit { -> Done } else { do i = i + 1; -> Send }
+    }
+    on Done { -> Done }
+  }
+
+  process Consumer(count:int) -> (sum:int) {
+    state Start, Receive, Finished
+    var total:int = 0
+    var received:int = 0
+
+    on Start { -> Receive }
+    on Receive {
+      do rr = try_receive chan
+      do value:int = rr?
+      do total = total + value
+      // Richer: receive struct
+      do rr2 = try_receive rich_chan
+      do data:Data = rr2?  // Ownership to consumer
+      do received = received + 1
+      if received == count { -> Finished } else { -> Receive }
+    }
+    on Finished { do sum = total; -> Finished }
+  }
+
+  schedule { step Producer; step Consumer; repeat }
+}

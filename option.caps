@@ -1,0 +1,23 @@
+// CAPS Stdlib: Option
+// Optional values for safe null handling.
+
+module std.option;
+
+pub enum Option<T> {
+  Some(T),
+  None
+}
+
+pub fn is_some<T>(opt: Option<T>) -> bool {
+  match opt {
+    Some(_) => true,
+    None => false
+  }
+}
+
+pub fn unwrap<T>(opt: Option<T>) -> T {
+  match opt {
+    Some(v) => v,
+    None => panic("unwrap on None")
+  }
+}

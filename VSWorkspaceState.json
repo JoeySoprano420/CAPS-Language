@@ -1,0 +1,15 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\Backend",
+    "\\demo",
+    "\\Frontend",
+    "\\src",
+    "\\src\\analysis",
+    "\\src\\aot",
+    "\\src\\ast",
+    "\\src\\backend",
+    "\\src\\ir"
+  ],
+  "PreviewInSolutionExplorer": false
+}

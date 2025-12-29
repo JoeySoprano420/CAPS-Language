@@ -1,0 +1,36 @@
+// CAPS Stdlib: Deterministic File and Network APIs
+
+module std.io;
+
+pub struct File {
+  handle: int
+}
+
+pub fn open_file(path: &str) -> Result<File, text> {
+  // Open file deterministically
+  Ok(File { handle: 0 })  // Placeholder
+}
+
+pub fn read_file(file: &File, buf: &mut [u8]) -> Result<int, text> {
+  // Read deterministically
+  Ok(0)  // Placeholder
+}
+
+pub fn write_file(file: &File, data: &[u8]) -> Result<(), text> {
+  // Write deterministically
+  Ok(())  // Placeholder
+}
+
+pub struct Socket {
+  fd: int
+}
+
+pub fn connect_socket(addr: &str) -> Result<Socket, text> {
+  // Connect deterministically
+  Ok(Socket { fd: 0 })  // Placeholder
+}
+
+pub fn send_socket(sock: &Socket, data: &[u8]) -> Result<(), text> {
+  // Send deterministically
+  Ok(())  // Placeholder
+}

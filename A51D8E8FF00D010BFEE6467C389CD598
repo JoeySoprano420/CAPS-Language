@@ -1,0 +1,430 @@
+﻿# CAPS-Language
+Computational Algorithmic Programming Sequence Language
+
+---
+
+## 1. What CAPS Does **So Far** (With the Upgrade Included)
+
+### At its core, CAPS is:
+
+> **A deterministic, analyzable, state-machine language for orchestrating communicating processes with compile-time guarantees.**
+
+That’s not marketing—that’s literally what your compiler enforces.
+
+### CAPS currently models **four things extremely well**
+
+---
+
+### 1️⃣ Deterministic process state machines
+
+Each `process` is:
+
+* A **finite state machine**
+* With:
+
+  * Explicit states
+  * Explicit transitions
+  * Exactly one transition per state evaluation
+* No implicit control flow
+* No hidden loops
+* No scheduler ambiguity
+
+This alone already makes CAPS stronger than:
+
+* ad-hoc event loops
+* callback soup
+* actor systems with implicit scheduling
+* coroutine systems with hidden suspension points
+
+**Why Deterministic Processes Matter:**
+
+In traditional concurrent programming, processes often have implicit state managed by threads, locks, or event queues. This leads to non-determinism: the same program can behave differently on different runs due to timing, scheduling, or race conditions. CAPS eliminates this by making state explicit and transitions total.
+
+**Key Benefits:**
+- **Predictability**: Every execution path is statically analyzable. You can reason about program behavior without running it.
+- **Debuggability**: No "heisenbugs" from timing issues. State transitions are logged and traceable.
+- **Safety**: Deadlocks and livelocks are caught at compile-time via FSM analysis.
+- **Performance**: No runtime overhead for state management; transitions are compiled to efficient jumps.
+
+**Example FSM in CAPS:**
+```
+process TrafficLight -> () {
+  state Red, Yellow, Green
+  var timer:int = 0
+
+  on Red {
+    do timer = timer + 1
+    if timer == 30 { do timer = 0; -> Green } else { -> Red }
+  }
+  on Green {
+    do timer = timer + 1
+    if timer == 45 { do timer = 0; -> Yellow } else { -> Green }
+  }
+  on Yellow {
+    do timer = timer + 1
+    if timer == 5 { do timer = 0; -> Red } else { -> Yellow }
+  }
+}
+```
+This FSM cycles deterministically: Red (30 ticks) → Green (45 ticks) → Yellow (5 ticks) → Red. No external events can interrupt; the process yields control explicitly.
+
+**Compile-Time Enforcement:**
+- Parser ensures every `on` block has exactly one transition (total functions).
+- Sema validates state names and prevents unreachable states.
+- IR lowering normalizes transitions to eliminate ambiguity.
+
+**Comparison to Alternatives:**
+- **Threads**: Non-deterministic scheduling; CAPS bakes schedule into code.
+- **Async/Await**: Implicit suspension; CAPS makes state explicit.
+- **Actors**: Message queues can overflow; CAPS bounds channels statically.
+
+---
+
+### 2️⃣ Typed message-passing over bounded channels
+
+Channels are:
+
+* Declared at **group scope**
+* Typed: `channel<T; N>`
+* Bounded (capacity known at compile time)
+* Explicitly written to and read from
+* **Enhanced**: Priority channels `priority_channel<T; N>`, timeout channels `timeout_channel<T; N; timeout>`
+
+And the compiler enforces:
+
+* correct typing on send/receive
+* visibility rules (group scoping)
+* explicit handling of blocking vs non-blocking (`send` vs `try_send`)
+* boundedness analysis (`max_sends`, `max_receives`)
+* **Enhanced**: Priority ordering, timeout handling
+
+This makes CAPS fundamentally **anti-footgun** for concurrency.
+
+**Ownership Transfer and No Shared Memory:**
+
+CAPS's design eliminates shared mutable state entirely, relying on **ownership transfer** via channels. This is a radical departure from traditional concurrency models.
+
+**Ownership Transfer:**
+- When you `send value -> channel`, ownership of `value` transfers from the sender to the channel.
+- The sender can no longer access `value`; it's "moved" into the channel's buffer.
+- On `receive`, ownership transfers to the receiver.
+- Prevents aliasing: No two entities own the same data simultaneously.
+- Memory Safety: No double-frees, no data races, no concurrent mutations.
+
+**No Shared Memory:**
+- Processes have private state; no global variables or heap sharing.
+- Channels are the sole communication mechanism—no locks, no atomics, no volatiles.
+- Eliminates the "shared state concurrency" pitfalls: deadlocks from lock ordering, livelocks from contention, races from unsynchronized access.
+- Simplifies Debugging: Issues are localized to processes or channels, not global state.
+
+**Why This Matters:**
+- **Composability**: Processes are independent; combine without interference.
+- **Scalability**: No contention on shared resources.
+- **Correctness**: Ownership rules prevent entire classes of bugs.
+- **Performance**: No synchronization overhead; channels are efficient ring buffers.
+
+**Example Ownership Flow:**
+```
+process Producer -> () {
+  var data:int = 42  // Owned by Producer
+  on Send {
+    do send data -> chan  // Ownership transfers to chan
+    // data is now invalid; cannot use it
+    -> Done
+  }
+}
+
+process Consumer -> () {
+  on Receive {
+    do rr = try_receive chan
+    do owned_data:int = rr?  // Ownership transfers to Consumer
+    // Process owned_data...
+    -> Receive
+  }
+}
+```
+Data flows unidirectionally: Producer → Channel → Consumer. No sharing, no races.
+
+**Compile-Time Enforcement:**
+- Ownership is implicit in the type system; no explicit `move` keywords needed.
+- Sema ensures channels are the only cross-process data path.
+- IR lowering tracks ownership to prevent invalid accesses.
+
+**Comparison to Alternatives:**
+- **Shared Memory (C++/Rust)**: Requires manual synchronization; CAPS automates it.
+- **Message Passing (Erlang/Go)**: Often allows sharing; CAPS enforces transfer.
+- **Functional Concurrency**: Immutable data; CAPS extends to mutable with safety.
+
+---
+
+### 3️⃣ Deterministic scheduling as a *language feature*
+
+The `schedule` is not runtime policy—it is **part of the program**.
+
+* Schedule steps must match process names
+* Schedule order is validated against dataflow topology (`@pipeline_safe`)
+* Execution order is **baked into emitted code**
+* No OS threads required
+* No runtime scheduler decisions
+
+This gives CAPS something very rare:
+
+> **Deterministic concurrency without runtime scheduling.**
+
+That’s huge.
+
+---
+
+### 4️⃣ Enhanced Processes
+
+Processes are **deterministic finite state machines (FSMs)** with advanced features:
+
+- **Concurrency Controls**: Mutex-like guards, atomic sections.
+- **State Hierarchies**: Nested states for complex logic.
+- **Event Handling**: External events with deterministic queuing.
+- **Resource Management**: Automatic cleanup on termination.
+
+**Example Enhanced Process:**
+```
+process AdvancedProc -> () {
+  state Init, Running, Cleanup
+  var mutex:Mutex = new_mutex()
+
+  on Init {
+    do acquire mutex
+    -> Running
+  }
+  on Running {
+    // Complex logic
+    do release mutex
+    -> Cleanup
+  }
+  on Cleanup {
+    // Cleanup
+    -> Cleanup
+  }
+}
+```
+
+---
+
+### 5️⃣ Enhanced Timers
+
+CAPS provides advanced deterministic timers:
+
+- **get_deterministic_timer()**: Monotonic time.
+- **set_timeout(duration)**: Schedule future action.
+- **wait_timer(timer)**: Block until timer.
+- **Bounded**: All timers have compile-time bounds.
+
+**Example:**
+```
+process TimerProc -> () {
+  on Start {
+    do t = set_timeout(1000)
+    -> Wait
+  }
+  on Wait {
+    do wait_timer(t)
+    -> Done
+  }
+  on Done { -> Done }
+}
+```
+
+---
+
+### 6️⃣ Enhanced Math
+
+Static math utilities with compile-time evaluation:
+
+- **static_sin(x)**, **static_cos(x)**: Trigonometry.
+- **static_pow(base, exp)**: Exponentiation.
+- **static_gcd(a, b)**, **static_lcm(a, b)**: Arithmetic.
+- **static_sqrt(x)**: Square root.
+
+**Example:**
+```
+const PI_SIN = static_sin(3.14159)
+```
+
+---
+
+### 7️⃣ Fixed-Size Collections
+
+Advanced fixed-size data structures:
+
+- **Arrays**: `[T; N]` immutable arrays.
+- **Stacks**: `stack<T; N>` LIFO.
+- **Queues**: `queue<T; N>` FIFO.
+- **Maps**: `map<K, V; N>` fixed-size associative.
+
+**Example:**
+```
+var stk:stack<int; 10> = new_stack()
+do push stk 42
+do val = pop stk
+```
+
+---
+
+### 8️⃣ Deterministic I/O
+
+Enhanced deterministic I/O:
+
+- **write_deterministic_io(data)**: Bounded write.
+- **read_deterministic_io() -> T**: Bounded read.
+- **open_file(path)**: Deterministic file open.
+- **close_file(handle)**: Safe close.
+
+**Example:**
+```
+process IOProc -> () {
+  on Write {
+    do handle = open_file("data.txt")
+    do write_deterministic_io(handle, "Hello")
+    do close_file(handle)
+    -> Done
+  }
+  on Done { -> Done }
+}
+```
+
+---
+
+### 4.1 Pipeline Stages
+
+1. **Lexing/Parsing**: Tokenize → AST (recursive descent parser).
+2. **Name Resolution**: Build symbol tables (modules, groups, processes, channels).
+3. **Type Checking**: Infer/check types; enforce channel/process scoping.
+4. **Well-Formedness**: Validate FSMs, transitions, annotations.
+5. **Annotation Enforcement**: Topology graphs, cycle detection, schedule validation.
+6. **Static Analysis**: Liveness, reachability, resource bounds, data flow, timer determinism, I/O safety, deadlock detection, memory proofs, lifecycle verification, determinism proofs.
+7. **Compile-Time Proofs**: Automated theorem proving, model checking, timer/I/O proofs, advanced invariants.
+8. **Optimizations**: Dead code elimination, channel fusion, process inlining, static memory layout, zero-copy message passing.
+9. **IR Lowering**: AST → Typed IR (desugar `?`, normalize transitions, handle FFI).
+10. **Optimizations**: Dead code elimination, channel fusion, process inlining, static memory layout, zero-copy message passing.
+11. **Backend Selection**: Typed IR → C++ (AOT) or x86-64 (direct).
+12. **Codegen**: Emit .cpp/.exe or .asm/.obj with unwind/debug info, including FFI calls.
+13. **Linking**: MSVC/lld-link to PE .exe, resolving FFI symbols.
+
+**Compile-Time Guarantees in Pipeline:**
+Each stage enforces CAPS's guarantees: parsing ensures total transitions, sema validates types and topology, static analysis proves properties like deadlock freedom and bounded memory, IR lowering desugars error handling and FFI. No shared memory assumptions; ownership is tracked implicitly. Advanced proofs ensure lifecycle and determinism.
+
+---
+
+## 2. New In This Upgrade
+
+### Overview
+
+This upgrade expands CAPS's syntax and capabilities significantly. Key additions are:
+
+- **Pattern Matching**: Match expressions against patterns.
+- **Static Arrays**: Fixed-size arrays known at compile-time.
+- **Deterministic Loops**: Loops with compile-time known bounds.
+- **Compile-Time Functions**: Functions evaluated at compile-time.
+- **New Type System Features**: Generics, unions, structs, enums, refinements, dependents.
+- **Additional Statements and Expressions**: New syntax for improved expressiveness.
+
+### Gory Details
+
+#### Channels
+- Declaration: `channel<T; N> name`, `priority_channel<T; N>`, `timeout_channel<T; N; timeout>`
+- Operations: `send expr -> chan`, `receive chan -> var`, `try_send`, `try_receive`
+- Semantics: Bounded queues, priorities, timeouts
+
+#### Processes
+- Signature: `process Name(inputs) -> (outputs) { ... }`
+- States: Declared explicitly (e.g., `state Start, Send`)
+- Locals: `var/let name:T = expr`
+- On-blocks: `on State { actions; transition }`
+- Transitions: `-> State` or `if cond { then_actions; -> ThenState } else { else_actions; -> ElseState }`
+- **Enhanced**: `mutex`, `atomic { ... }`, nested states
+
+#### Expressions
+- Literals: `int`, `real`, `text`, `bool`
+- Operators: Arithmetic (`+`, `-`, `*`, `/`), comparisons (`==`, `!=`, `<`, etc.), logical (`&&`, `||`)
+- Calls: `len(channel)`, `get_deterministic_timer()`, `write_deterministic_io(data)`, `static_sin(x)`, etc.
+- Result handling: `expr?` for error propagation (desugars to `__Error` state)
+- **Match**: `match expr { pattern => action }`
+- **Arrays**: `[elem1, elem2]`
+- **Loops**: `for var in start..end { ... }`
+
+#### Types
+- Primitives: `int`, `bool`, `real`, `text`
+- Composites: `Result<T, E>` (e.g., `Result<int, text>` for try ops)
+- Channels: `channel<T; N>`, `priority_channel<T; N>`, `timeout_channel<T; N; timeout>`
+- **Generics**: `List<T>`, `Option<T>`
+- **Unions**: `union { int, text }`
+- **Structs**: `struct Point { x:int, y:int }`
+- **Enums**: `enum Color { Red, Green, Blue }`
+- **Refinements**: `{int | x > 0}` (positive integers)
+- **Dependents**: Arrays sized by values (e.g., `array<int; n>` where `n` is constant)
+- **Fixed-Size Buffers**: `buffer<T; N>` for compile-time sized arrays
+- **Bounded Queues**: Channels as `queue<T; N>`
+- **Static Arrays**: `[T; N]` for immutable fixed-size arrays
+- **Collections**: `stack<T; N>`, `queue<T; N>`, `map<K, V; N>`
+
+#### Built-in Functions
+- **Timers**: `get_deterministic_timer() -> int`, `set_timeout(duration)`, `wait_timer(timer)`
+- **I/O**: `write_deterministic_io(data)`, `read_deterministic_io() -> T`, `open_file(path)`, `close_file(handle)`
+- **Math**: `static_sin(x)`, `static_cos(x)`, `static_pow(base, exp)`, `static_gcd(a, b)`, `static_sqrt(x)`
+- **Orchestration**: `spawn(process)`, `join(process)`, `monitor(process)`
+- **FFI**: `@ffi extern fn name(args) -> ret`
+
+---
+
+### 🔟 More Optimizations
+
+Advanced passes for performance:
+
+- **Constant Folding**: Evaluate expressions at compile-time.
+- **Inlining**: Embed small functions for speed.
+- **Dead Code Elimination**: Remove unused states/channels.
+- **Channel Fusion**: Merge compatible channels.
+- **Buffer Optimization**: Optimize fixed-size buffers.
+- **Math Utilities**: Static math computations.
+- **Process Inlining**: Inline small processes.
+- **Static Memory Layout**: Pre-allocate memory.
+- **Zero-Copy Message Passing**: Pass messages without copying.
+
+**Flags:**
+- `--optimize-aggressive`: Enable all passes.
+- `--profile-guided`: Use profiling for optimization.
+- `--enable-zero-copy`: Enable zero-copy messaging.
+- `--static-memory`: Use static memory layout.
+- `--check-io-determinism        Ensure I/O is deterministic`
+- `--verify-ffi-safety           Check FFI calls for safety`
+- `--detect-deadlocks            Run deadlock detection`
+- `--prove-memory-bounds         Verify bounded memory`
+- `--analyze-channel-graph       Perform channel graph analysis`
+- `--verify-lifecycles           Check process lifecycles`
+- `--prove-determinism           Run determinism proofs`
+
+---
+
+### 🔟 More Tools
+
+CAPS now includes a full suite of development tools:
+
+- **Formatter (`caps_formatter`)**: Formats code with customizable rules, alignment, import sorting.
+- **Linter (`caps_linter`)**: Advanced linting with rules, severity, suggestions, auto-fix.
+- **Package Manager (`caps_pm`)**: Manages packages with dependencies, versions, registry.
+- **Debugger (`caps_debugger`)**: Interactive debugging with breakpoints and inspection.
+- **Language Server (`caps_lsp`)**: Full LSP for IDE integration with completion, hover, diagnostics.
+- **Build System (`caps_build`)**: Custom build tool with dependency resolution.
+
+**Usage Examples:**
+- Format: `caps_formatter file.caps --indent=4 --align`
+- Lint: `caps_linter file.caps --fix`
+- Package: `caps_pm install stdlib 1.0.0`
+- Debug: `caps_debugger file.caps`
+- LSP: Run as server for editors
+- Build: `caps_build .`
+
+
+
+
+
+
+

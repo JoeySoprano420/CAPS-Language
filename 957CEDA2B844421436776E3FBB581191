@@ -1,0 +1,51 @@
+﻿# CAPS Test Suites
+
+## Table of Contents
+1. [Unit Tests](#unit-tests)
+2. [Integration Tests](#integration-tests)
+3. [Regression Tests](#regression-tests)
+4. [Conformance Suites](#conformance-suites)
+5. [Backend Tests](#backend-tests)
+6. [Stdlib Tests](#stdlib-tests)
+7. [Deadlock Conformance Tests](#deadlock-conformance-tests)
+8. [Channel Graph Tests](#channel-graph-tests)
+9. [Determinism Tests](#determinism-tests)
+10. [Platform Tests](#platform-tests)
+11. [Fuzzing Harnesses](#fuzzing-harnesses)
+12. [Formal Verification Artifacts](#formal-verification-artifacts)
+
+## Unit Tests
+Test individual functions and modules.
+
+## Integration Tests
+Test component interactions.
+
+## Regression Tests
+Ensure no regressions.
+
+## Conformance Suites
+Verify language compliance.
+
+## Backend Tests
+Test code generation.
+
+## Stdlib Tests
+Test standard library.
+
+## Deadlock Conformance Tests
+Test deadlock detection.
+
+## Channel Graph Tests
+Test channel graph analysis.
+
+## Determinism Tests
+Test deterministic behavior.
+
+## Platform Tests
+Test platform compatibility.
+
+## Fuzzing Harnesses
+Fuzz components for bugs.
+
+## Formal Verification Artifacts
+Models and proofs.

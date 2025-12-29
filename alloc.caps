@@ -1,0 +1,18 @@
+// CAPS Stdlib: Static Allocators
+// Compile-time memory allocation.
+
+module std.alloc;
+
+pub struct StaticAllocator<T, N> {
+  buffer: [T; N],
+  used: int
+}
+
+pub fn alloc<T, N>(alloc: &mut StaticAllocator<T, N>) -> &mut T {
+  // Allocate from static buffer
+  &mut alloc.buffer[alloc.used]  // Placeholder
+}
+
+pub fn dealloc<T, N>(alloc: &mut StaticAllocator<T, N>, ptr: &mut T) {
+  // Deallocate (no-op for static)
+}

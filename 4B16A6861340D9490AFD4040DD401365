@@ -1,0 +1,46 @@
+﻿#pragma once
+#include "ast/ast.h"
+#include "util/diag.h"
+#include <ostream>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+struct ChannelUse {
+  std::string channel;
+  std::unordered_set<std::string> writers;
+  std::unordered_set<std::string> readers;
+};
+
+struct TopologyEdge {
+  std::string from_process;
+  std::string channel;
+  std::string to_process;
+  bool dashed = false;          // dashed if ambiguous
+  std::string note;             // optional annotation for output
+};
+
+struct TopologyGraph {
+  // Collapsed triples: Process -> Channel -> Process (stored as a single triple per from->to via channel)
+  std::vector<TopologyEdge> edges;
+
+  // A flat per-channel use summary for diagnostics / text format.
+  std::vector<ChannelUse> uses;
+
+  // Channels that violate single-writer/single-reader.
+  std::vector<ChannelUse> ambiguities;
+};
+
+TopologyGraph build_topology_graph(const GroupDecl& g);
+
+// Output formats
+void dump_topology_dot(std::ostream& os, const GroupDecl& g, const TopologyGraph& tg);
+void dump_topology_text(std::ostream& os, const GroupDecl& g, const TopologyGraph& tg);
+
+struct PipelineChecker {
+  explicit PipelineChecker(Diag& d) : diag(d) {}
+  void check_group_pipeline_safe(const GroupDecl& g);
+
+private:
+  Diag& diag;
+};

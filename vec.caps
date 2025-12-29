@@ -1,0 +1,22 @@
+// CAPS Stdlib: Vec
+// Dynamic vectors.
+
+module std.vec;
+
+pub struct Vec<T> {
+  data: [T; 0],  // Placeholder for dynamic
+  len: int
+}
+
+pub fn new<T>() -> Vec<T> {
+  Vec { data: [], len: 0 }
+}
+
+pub fn push<T>(v: &mut Vec<T>, val: T) {
+  // Resize and push
+  v.len = v.len + 1;
+}
+
+pub fn len<T>(v: &Vec<T>) -> int {
+  v.len
+}

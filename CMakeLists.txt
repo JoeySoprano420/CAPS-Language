@@ -1,25 +1,18 @@
-# CAPS-Language Build System
-# Enhanced with tools: formatter, linter, package manager, debugger, LSP, build, profiler, docgen, analyzer, perf, simulator.
-# Tests: unit, integration, deadlock, channel_graph, determinism, backend, platform, regression, fuzzing, verification.
+cmake_minimum_required(VERSION 3.16)
+project(caps_backend LANGUAGES CXX)
 
-cmake_minimum_required(VERSION 3.15)
-project(CAPS)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Main compiler
-add_subdirectory(src)
+add_library(caps_backend STATIC
+  src/backend/value.cpp
+  src/backend/channel.cpp
+  src/backend/ir.cpp
+  src/backend/runtime.cpp
+  src/backend/eval.cpp
+  src/backend/exec.cpp
+  src/backend/scheduler.cpp
+  src/backend/trace.cpp
+)
 
-# Tools
-add_subdirectory(tools/formatter)
-add_subdirectory(tools/linter)
-add_subdirectory(tools/pm)
-add_subdirectory(tools/debugger)
-add_subdirectory(tools/lsp)
-add_subdirectory(tools/build)
-add_subdirectory(tools/profiler)
-add_subdirectory(tools/docgen)
-add_subdirectory(tools/analyzer)
-add_subdirectory(tools/perf)
-add_subdirectory(tools/simulator)
-
-# Tests
-add_subdirectory(tests)
+target_include_directories(caps_backend PUBLIC src)

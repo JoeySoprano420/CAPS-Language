@@ -1,0 +1,44 @@
+module data_pipeline
+
+@pipeline_safe
+@realtimesafe
+group Pipeline {
+  channel<int; 100> input
+  channel<int; 100> processed
+
+  process Producer -> () {
+    state Generate
+    var val:int = 0
+
+    on Generate {
+      do try_send val -> input
+      do val = val + 1
+      -> Generate
+    }
+  }
+
+  process Processor -> () {
+    state Process
+
+    on Process {
+      do rr = try_receive input
+      do v:int = rr?
+      do processed_v = v * 2  // Simple processing
+      do try_send processed_v -> processed
+      -> Process
+    }
+  }
+
+  process Consumer -> () {
+    state Consume
+
+    on Consume {
+      do rr = try_receive processed
+      do v:int = rr?
+      do write_deterministic_io(v)  // Output
+      -> Consume
+    }
+  }
+
+  schedule { step Producer; step Processor; step Consumer; repeat }
+}

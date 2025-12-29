@@ -1,0 +1,16 @@
+// CAPS Stdlib: Safe FFI
+// Safe foreign function interface.
+
+module std.ffi;
+
+pub fn call_c_function(func: &str, args: &[Value]) -> Value {
+  // Safe C call
+  Value::Int(0)  // Placeholder
+}
+
+pub struct Value {
+  // Variant for different types
+  Int(int),
+  Float(real),
+  Text(text)
+}

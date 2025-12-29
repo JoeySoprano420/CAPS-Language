@@ -1,0 +1,19 @@
+﻿# CAPS Test Suites
+
+## Unit Tests
+Test individual functions and modules.
+
+## Integration Tests
+Test component interactions.
+
+## Regression Tests
+Ensure no regressions.
+
+## Conformance Suites
+Verify language compliance.
+
+## Backend Tests
+Test code generation.
+
+## Stdlib Tests
+Test standard library.
