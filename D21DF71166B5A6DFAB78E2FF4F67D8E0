@@ -1,10 +1,1 @@
-﻿# CAPS Deterministic OS Kernel
-# A full deterministic OS kernel for CAPS.
-
-# Features:
-# - Deterministic scheduling
-# - Memory management
-# - I/O handling
-# - Networking
-
-# Usage: Integrate with CAPS runtime.
+﻿

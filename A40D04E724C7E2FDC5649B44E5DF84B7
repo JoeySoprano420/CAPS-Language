@@ -9,9 +9,17 @@
 // process lifecycle verification, determinism proofs.
 // New: pattern matching, static arrays, deterministic loops, compile-time functions.
 // Enhanced: priority channels, advanced processes, enhanced timers, math, collections, I/O.
+// Clean Type System: Generics, dependent types, refinement types, union types.
+// Strong Static Analysis: Type safety proofs, lifetime analysis, borrow checking.
+// Massive Stdlib: Vec, Map, Option, Math, I/O.
+// Good Tooling: Formatter, linter, debugger, LSP, build system.
 // Use tools: format with caps_formatter, lint with caps_linter, debug with caps_debugger.
 
 module demo
+
+import std.vec;
+import std.math;
+import std.option;
 
 @pipeline_safe
 @no_deadlock
@@ -45,6 +53,7 @@ group Demo {
     var i:int = 1
     var timer_start:int = 0
     var mutex:Mutex = new_mutex()
+    var vec:Vec<int> = Vec::new()  // Stdlib Vec
 
     on Start { 
       do timer_start = get_deterministic_timer()  // Enhanced timer
@@ -65,12 +74,14 @@ group Demo {
       do push stk i
       // Queue operations
       do enqueue coll_queue data
+      // Vec operations
+      do vec.push(i)
       // Deterministic loop
       for j in 0..3 {
         do static_arr[j] = static_arr[j] + i
       }
       // Static math
-      do computed = static_sin(static_pow(i, 2))
+      do computed = math::sin(math::pow(i, 2))
       do release mutex
       if i == limit { -> Done } else { do i = i + 1; -> Send }
     }

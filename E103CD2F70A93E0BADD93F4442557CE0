@@ -189,3 +189,35 @@ struct ConstFnDecl {
   std::unique_ptr<Type> ret_type;
   std::vector<std::unique_ptr<Stmt>> body;
 };
+
+// Enhanced AST for clean, deterministic type system
+// Added: Generics, dependent types, refinement types, union types
+
+struct GenericType {
+  std::string base;
+  std::vector<Type> params;
+};
+
+struct DependentType {
+  Type base;
+  Expr condition;  // e.g., {int | x > 0}
+};
+
+struct RefinementType {
+  Type base;
+  Expr predicate;
+};
+
+struct UnionType {
+  std::vector<Type> variants;
+};
+
+struct EnumType {
+  std::string name;
+  std::vector<std::string> variants;
+};
+
+struct StructType {
+  std::string name;
+  std::vector<std::pair<std::string, Type>> fields;
+};

@@ -1,9 +1,1 @@
-﻿# CAPS Deterministic Distributed Runtime
-# Runtime for distributed CAPS execution.
-
-# Features:
-# - Node communication
-# - Deterministic message passing
-# - Fault tolerance
-
-# Usage: caps_distributed <config>
+﻿

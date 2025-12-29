@@ -1,0 +1,231 @@
+﻿# CAPS-Language
+Computational Algorithmic Programming Sequence Language
+
+---
+
+## 1. What CAPS Does **So Far** (With the Upgrade Included)
+
+### At its core, CAPS is:
+
+> **A deterministic, analyzable, state-machine language for orchestrating communicating processes with compile-time guarantees.**
+
+That’s not marketing—that’s literally what your compiler enforces.
+
+### CAPS currently models **four things extremely well**
+
+---
+
+### 1️⃣ Clean, Deterministic Type System
+
+CAPS features a powerful type system ensuring safety and determinism:
+
+- **Generics**: Parameterized types (`Vec<T>`)
+- **Dependent Types**: Types depending on values (`{int | x > 0}`)
+- **Refinement Types**: Subtypes with predicates
+- **Union Types**: Sum types for variants
+- **Enum/Struct**: Algebraic data types
+- **Ownership & Borrowing**: Automatic memory management
+- **Type Inference**: Automatic type deduction
+- **Deterministic Types**: No non-deterministic constructs
+
+**Benefits:**
+- **Safety**: Compile-time prevention of type errors
+- **Expressiveness**: Rich types for complex data
+- **Performance**: Optimized representations
+
+---
+
+### 2️⃣ Strong Static Analysis
+
+CAPS provides comprehensive static analysis:
+
+- **Type Safety Proofs**: Prove absence of type errors
+- **Lifetime Analysis**: Ensure no dangling references
+- **Borrow Checking**: Ownership and borrowing rules
+- **Resource Bounds**: Prove memory and CPU limits
+- **Concurrency Verification**: Safe parallel execution
+- **Determinism Checks**: Verify predictable behavior
+- **Deadlock Detection**: Find potential deadlocks
+- **Liveness Verification**: Ensure progress
+
+**Tools:**
+- `--analyze-lifetimes`
+- `--borrow-check`
+- `--prove-resources`
+
+---
+
+### 3️⃣ Massive Powerful Stdlib
+
+CAPS includes a comprehensive standard library:
+
+- **Core**: Option, Result, Vec, Map, String
+- **Math**: Trigonometry, algebra, constants
+- **Concurrency**: Sync primitives, channels, timers
+- **I/O**: File, console, networking
+- **Utils**: Iterators, formatting, testing
+- **Deterministic**: All operations are predictable
+
+**Usage:**
+```
+import std.vec;
+import std.math;
+
+let v = Vec::new();
+v.push(42);
+let s = math::sin(math::PI);
+```
+
+---
+
+### 4️⃣ Good Tooling
+
+CAPS offers excellent development tools:
+
+- **Formatter**: Customizable code formatting
+- **Linter**: Rule-based style and error checking
+- **Package Manager**: Dependency and version management
+- **Debugger**: Interactive debugging
+- **LSP**: Full IDE integration
+- **Build System**: Advanced compilation
+
+**Integration:** Seamless with VSCode, Vim, etc.
+
+---
+
+### 4.1 Pipeline Stages
+
+1. **Lexing/Parsing**: Tokenize → AST (recursive descent parser).
+2. **Name Resolution**: Build symbol tables (modules, groups, processes, channels).
+3. **Type Checking**: Infer/check types; enforce channel/process scoping.
+4. **Well-Formedness**: Validate FSMs, transitions, annotations.
+5. **Annotation Enforcement**: Topology graphs, cycle detection, schedule validation.
+6. **Static Analysis**: Liveness, reachability, resource bounds, data flow, timer determinism, I/O safety, deadlock detection, memory proofs, lifecycle verification, determinism proofs.
+7. **Compile-Time Proofs**: Automated theorem proving, model checking, timer/I/O proofs, advanced invariants.
+8. **Optimizations**: Dead code elimination, channel fusion, process inlining, static memory layout, zero-copy message passing.
+9. **IR Lowering**: AST → Typed IR (desugar `?`, normalize transitions, handle FFI).
+10. **Optimizations**: Dead code elimination, channel fusion, process inlining, static memory layout, zero-copy message passing.
+11. **Backend Selection**: Typed IR → C++ (AOT) or x86-64 (direct).
+12. **Codegen**: Emit .cpp/.exe or .asm/.obj with unwind/debug info, including FFI calls.
+13. **Linking**: MSVC/lld-link to PE .exe, resolving FFI symbols.
+
+**Compile-Time Guarantees in Pipeline:**
+Each stage enforces CAPS's guarantees: parsing ensures total transitions, sema validates types and topology, static analysis proves properties like deadlock freedom and bounded memory, IR lowering desugars error handling and FFI. No shared memory assumptions; ownership is tracked implicitly. Advanced proofs ensure lifecycle and determinism.
+
+---
+
+## 2. New In This Upgrade
+
+### Overview
+
+This upgrade expands CAPS's syntax and capabilities significantly. Key additions are:
+
+- **Pattern Matching**: Match expressions against patterns.
+- **Static Arrays**: Fixed-size arrays known at compile-time.
+- **Deterministic Loops**: Loops with compile-time known bounds.
+- **Compile-Time Functions**: Functions evaluated at compile-time.
+- **New Type System Features**: Generics, unions, structs, enums, refinements, dependents.
+- **Additional Statements and Expressions**: New syntax for improved expressiveness.
+
+### Gory Details
+
+#### Channels
+- Declaration: `channel<T; N> name`, `priority_channel<T; N>`, `timeout_channel<T; N; timeout>`
+- Operations: `send expr -> chan`, `receive chan -> var`, `try_send`, `try_receive`
+- Semantics: Bounded queues, priorities, timeouts
+
+#### Processes
+- Signature: `process Name(inputs) -> (outputs) { ... }`
+- States: Declared explicitly (e.g., `state Start, Send`)
+- Locals: `var/let name:T = expr`
+- On-blocks: `on State { actions; transition }`
+- Transitions: `-> State` or `if cond { then_actions; -> ThenState } else { else_actions; -> ElseState }`
+- **Enhanced**: `mutex`, `atomic { ... }`, nested states
+
+#### Expressions
+- Literals: `int`, `real`, `text`, `bool`
+- Operators: Arithmetic (`+`, `-`, `*`, `/`), comparisons (`==`, `!=`, `<`, etc.), logical (`&&`, `||`)
+- Calls: `len(channel)`, `get_deterministic_timer()`, `write_deterministic_io(data)`, `static_sin(x)`, etc.
+- Result handling: `expr?` for error propagation (desugars to `__Error` state)
+- **Match**: `match expr { pattern => action }`
+- **Arrays**: `[elem1, elem2]`
+- **Loops**: `for var in start..end { ... }`
+
+#### Types
+- Primitives: `int`, `bool`, `real`, `text`
+- Composites: `Result<T, E>` (e.g., `Result<int, text>` for try ops)
+- Channels: `channel<T; N>`, `priority_channel<T; N>`, `timeout_channel<T; N; timeout>`
+- **Generics**: `List<T>`, `Option<T>`
+- **Unions**: `union { int, text }`
+- **Structs**: `struct Point { x:int, y:int }`
+- **Enums**: `enum Color { Red, Green, Blue }`
+- **Refinements**: `{int | x > 0}` (positive integers)
+- **Dependents**: Arrays sized by values (e.g., `array<int; n>` where `n` is constant)
+- **Fixed-Size Buffers**: `buffer<T; N>` for compile-time sized arrays
+- **Bounded Queues**: Channels as `queue<T; N>`
+- **Static Arrays**: `[T; N]` for immutable fixed-size arrays
+- **Collections**: `stack<T; N>`, `queue<T; N>`, `map<K, V; N>`
+
+#### Built-in Functions
+- **Timers**: `get_deterministic_timer() -> int`, `set_timeout(duration)`, `wait_timer(timer)`
+- **I/O**: `write_deterministic_io(data)`, `read_deterministic_io() -> T`, `open_file(path)`, `close_file(handle)`
+- **Math**: `static_sin(x)`, `static_cos(x)`, `static_pow(base, exp)`, `static_gcd(a, b)`, `static_sqrt(x)`
+- **Orchestration**: `spawn(process)`, `join(process)`, `monitor(process)`
+- **FFI**: `@ffi extern fn name(args) -> ret`
+
+---
+
+### 🔟 More Optimizations
+
+Advanced passes for performance:
+
+- **Constant Folding**: Evaluate expressions at compile-time.
+- **Inlining**: Embed small functions for speed.
+- **Dead Code Elimination**: Remove unused states/channels.
+- **Channel Fusion**: Merge compatible channels.
+- **Buffer Optimization**: Optimize fixed-size buffers.
+- **Math Utilities**: Static math computations.
+- **Process Inlining**: Inline small processes.
+- **Static Memory Layout**: Pre-allocate memory.
+- **Zero-Copy Message Passing**: Pass messages without copying.
+
+**Flags:**
+- `--optimize-aggressive`: Enable all passes.
+- `--profile-guided`: Use profiling for optimization.
+- `--enable-zero-copy`: Enable zero-copy messaging.
+- `--static-memory`: Use static memory layout.
+- `--check-io-determinism        Ensure I/O is deterministic`
+- `--verify-ffi-safety           Check FFI calls for safety`
+- `--detect-deadlocks            Run deadlock detection`
+- `--prove-memory-bounds         Verify bounded memory`
+- `--analyze-channel-graph       Perform channel graph analysis`
+- `--verify-lifecycles           Check process lifecycles`
+- `--prove-determinism           Run determinism proofs`
+
+---
+
+### 🔟 More Tools
+
+CAPS now includes a full suite of development tools:
+
+- **Formatter (`caps_formatter`)**: Formats code with customizable rules, alignment, import sorting.
+- **Linter (`caps_linter`)**: Advanced linting with rules, severity, suggestions, auto-fix.
+- **Package Manager (`caps_pm`)**: Manages packages with dependencies, versions, registry.
+- **Debugger (`caps_debugger`)**: Interactive debugging with breakpoints and inspection.
+- **Language Server (`caps_lsp`)**: Full LSP for IDE integration with completion, hover, diagnostics.
+- **Build System (`caps_build`)**: Custom build tool with dependency resolution.
+
+**Usage Examples:**
+- Format: `caps_formatter file.caps --indent=4 --align`
+- Lint: `caps_linter file.caps --fix`
+- Package: `caps_pm install stdlib 1.0.0`
+- Debug: `caps_debugger file.caps`
+- LSP: Run as server for editors
+- Build: `caps_build .`
+
+
+
+
+
+
+

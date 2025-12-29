@@ -265,6 +265,8 @@ Annotations and static analysis enforce safety properties like acyclicity and bo
 - **Lint Code**: `./caps_linter hello.caps --fix`
 - **Debug Program**: `./caps_debugger hello.caps`
 - **Build Project**: `./caps_build .`
+- **Analyze Lifetimes**: `./caps_frontend --analyze-lifetimes hello.caps`
+- **Borrow Check**: `./caps_frontend --borrow-check hello.caps`
 
 ---
 

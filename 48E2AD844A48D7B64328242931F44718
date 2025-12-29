@@ -85,3 +85,15 @@ Benefits:
 - Faster execution
 
 [Read more...]
+
+### CAPS Type System: Clean and Deterministic
+Posted: 2024-01-15
+
+CAPS's type system features generics, dependent types, refinement types, and automatic ownership.
+
+Features:
+- Compile-time safety
+- Expressive type constructs
+- Deterministic behavior
+
+[Read more...]

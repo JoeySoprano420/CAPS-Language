@@ -173,7 +173,11 @@ int main(int argc, char** argv) {
   // Sema (also runs pipeline checks)
   Sema sema(diag);
   sema.check(prog);
-  sema.check_advanced(prog);  // New: Run advanced analyses
+  sema.infer_types(prog);
+  sema.check_lifetimes(prog);
+  sema.borrow_check(prog);
+  sema.determinism_check(prog);
+  sema.check_advanced(prog);  // Existing advanced checks
 
   if (diag.has_errors()) {
     diag.print_all(std::cerr);
