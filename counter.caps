@@ -1,0 +1,16 @@
+module counter
+
+group Counter {
+  process Count -> (result:int) {
+    state Start, Loop
+    var i:int = 0
+
+    on Start { -> Loop }
+    on Loop {
+      do i = i + 1
+      if i < 100 { -> Loop } else { do result = i; -> Loop }
+    }
+  }
+
+  schedule { step Count; repeat }
+}

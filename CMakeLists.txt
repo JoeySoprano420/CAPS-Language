@@ -1,30 +1,18 @@
-# CAPS Test Suites
-# Unit, integration, regression, conformance, backend, stdlib,
-# deadlock, channel graph, determinism, platform, fuzzing, verification.
+cmake_minimum_required(VERSION 3.16)
+project(caps_backend LANGUAGES CXX)
 
-# Unit tests
-add_executable(unit_tests unit_tests.cpp)
-target_link_libraries(unit_tests gtest_main)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Integration tests
-add_executable(integration_tests integration_tests.cpp)
-target_link_libraries(integration_tests gtest_main)
+add_library(caps_backend STATIC
+  src/backend/value.cpp
+  src/backend/channel.cpp
+  src/backend/ir.cpp
+  src/backend/runtime.cpp
+  src/backend/eval.cpp
+  src/backend/exec.cpp
+  src/backend/scheduler.cpp
+  src/backend/trace.cpp
+)
 
-# Add other test executables
-add_executable(deadlock_tests deadlock/deadlock_tests.cpp)
-target_link_libraries(deadlock_tests gtest_main)
-
-add_executable(channel_graph_tests channel_graph/channel_graph_tests.cpp)
-target_link_libraries(channel_graph_tests gtest_main)
-
-add_executable(determinism_tests determinism/determinism_tests.cpp)
-target_link_libraries(determinism_tests gtest_main)
-
-add_executable(backend_tests backend/backend_tests.cpp)
-target_link_libraries(backend_tests gtest_main)
-
-add_executable(platform_tests platform/platform_tests.cpp)
-target_link_libraries(platform_tests gtest_main)
-
-add_executable(regression_tests regression/regression_tests.cpp)
-target_link_libraries(regression_tests gtest_main)
+target_include_directories(caps_backend PUBLIC src)

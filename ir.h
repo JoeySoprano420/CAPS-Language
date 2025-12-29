@@ -1,9 +1,42 @@
 #pragma once
 #include <string>
 #include <vector>
-#include "ast/ast.h"
+#include <unordered_map>
+#include <optional>
 
-using IRExpr = Expr;
+namespace caps {
+
+enum class IRTypeKind { Int, Bool, Real, Text, Record, Array, Tuple, ResultAny };
+
+struct IRType {
+  IRTypeKind kind = IRTypeKind::Int;
+  std::string name; // for debug
+};
+
+struct IRExpr {
+  enum class Kind {
+    LitInt, LitBool, LitReal, LitText,
+    Var,
+    BinOp,      // + - * / == != < > <= >= && ||
+    Field,      // expr.field
+    Index,      // expr[index]
+    LenChannel, // len(channelName)
+  } kind;
+
+  std::string op;         // for BinOp
+  std::string name;       // for Var / LenChannel
+  std::string field;      // for Field
+  int64_t lit_i = 0;
+  bool lit_b = false;
+  double lit_r = 0.0;
+  std::string lit_s;
+
+  int64_t index_const = 0;
+
+  std::vector<IRExpr> args; // BinOp has 2 args; Field has 1; Index has 1; etc.
+
+  static IRExpr var(std::string n) { IRExpr e; e.kind=Kind::Var; e.name=std::move(n); return e; }
+};
 
 struct IRAction {
   enum class Kind {
@@ -12,87 +45,75 @@ struct IRAction {
     Receive,
     TrySend,
     TryReceive,
-    TryUnwrapAssign,
+    // Optional: Assert, etc.
+    // Note: ? is not an action; it is desugared into transitions into __Error + __last_error handling.
   } kind;
 
-  SourcePos pos;
-
-  // Assign
-  std::string dst;
-  IRExpr expr;
-
-  // Send/Receive
-  std::string chan;
-  bool recv_declares = false;
-
-  // TrySend
-  std::string try_send_out;
-  IRExpr try_send_expr;
-
-  // TryReceive
-  std::string try_recv_out;
-
-  // TryUnwrapAssign
-  std::string unwrap_dst;
-  IRExpr unwrap_result_expr;
-  std::string unwrap_error_state;  // "__Error"
-  std::string unwrap_last_error;   // "__last_error"
+  std::string dst; // Assign/Receive/Try* result var
+  IRExpr expr;     // Assign or Send expr or TrySend expr
+  std::string chan; // Send/Receive channel name
 };
 
 struct IRTransition {
-  enum class Kind { Unconditional, IfElse } kind;
-  SourcePos pos;
+  enum class Kind { Goto, IfElse } kind;
 
-  std::string to;
-
+  // IfElse
   IRExpr cond;
-  std::string then_to;
-  std::string else_to;
 
+  std::string then_state;
+  std::string else_state;
+
+  // carry then/else action lists (as requested)
   std::vector<IRAction> then_actions;
   std::vector<IRAction> else_actions;
+
+  // Goto
+  std::string to_state;
 };
 
 struct IRState {
   std::string name;
+  bool terminal = false;
   std::vector<IRAction> actions;
   IRTransition transition;
 };
 
 struct IRProcess {
   std::string name;
-  std::vector<IRState> states;
+  std::string initial_state;
+  std::unordered_map<std::string, IRState> states;
+
+  // locals schema for debug + initialization
+  std::vector<std::string> local_names;
+
+  // outputs (written by process, read after finish)
+  std::vector<std::string> output_names;
+
+  // special error state name for ? desugaring
+  // convention: "__Error" exists if process uses ? and has error path
+};
+
+struct IRChannelDecl {
+  std::string name;
+  size_t capacity = 0;
+  IRType elem_type;
+};
+
+struct IRSchedule {
+  std::vector<std::string> steps; // process names
+  bool repeat = true;
 };
 
 struct IRGroup {
   std::string name;
+  std::vector<std::string> annotations; // e.g. "pipeline_safe", "realtimesafe"
+  std::vector<IRChannelDecl> channels;
   std::vector<IRProcess> processes;
-  std::vector<std::string> schedule_steps;
+  IRSchedule schedule;
 };
 
-struct IRExpr {
-  enum class Kind {
-    LitI64, LitBool, LitF64, LitText,
-    Var,
-    BinOp,      // typed binop
-    // Result accessors (since you desugar ? and use ok/value/error in sema)
-    ResultOk,     // ok(exprResult)
-    ResultValue,  // value(exprResult)
-    ResultError,  // error(exprResult) -> text
-    Call,         // function call
-  } kind{};
-
-  Type type;
-
-  std::string var;     // Var
-  std::string op;      // BinOp
-  int64_t i64{};
-  bool b{};
-  double f64{};
-  std::string text;
-
-  std::string func_name; // Call
-  std::vector<IRExpr> args; // BinOp 2 args; Result* 1 arg; Call args
-
-  static IRExpr v(std::string n, Type t) { IRExpr e; e.kind=IRExpr::Kind::Var; e.var=std::move(n); e.type=t; return e; }
+struct IRProgram {
+  std::vector<IRGroup> groups;
 };
+
+} // namespace caps

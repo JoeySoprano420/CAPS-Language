@@ -1,0 +1,31 @@
+module channel_throughput
+
+@pipeline_safe
+group Benchmark {
+  channel<int; 1000> chan
+
+  process Producer -> () {
+    state Send
+    var count:int = 0
+
+    on Send {
+      do try_send count -> chan
+      do count = count + 1
+      if count < 1000000 { -> Send } else { -> Send }  // Loop
+    }
+  }
+
+  process Consumer -> () {
+    state Receive
+    var received:int = 0
+
+    on Receive {
+      do rr = try_receive chan
+      do v:int = rr?
+      do received = received + 1
+      if received < 1000000 { -> Receive } else { -> Receive }
+    }
+  }
+
+  schedule { step Producer; step Consumer; repeat }
+}

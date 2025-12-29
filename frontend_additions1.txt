@@ -1,0 +1,72 @@
+Update src/main.cpp (flags + check-only + dump options)
+
+Note: This uses has_ann(...) from pipeline.cpp. Since it’s static there, main can’t see it.
+So add this small helper near the top of main.cpp (or make a shared helper). Easiest: put it in main.cpp:
+
+Add right under includes:
+
+static bool has_ann(const std::vector<Annotation>& anns, const std::string& n) {
+  for (auto& a : anns) if (a.name == n) return true;
+  return false;
+}
+
+
+(Yes, same name; it’s fine in this TU.)
+
+How you use it
+CI / “lint” mode
+caps_frontend --check-only demo/demo.caps
+echo $?
+# 0 if OK, 2 if any errors
+
+Dump AST
+caps_frontend --dump-ast demo/demo.caps
+
+Dump topology (Graphviz DOT)
+caps_frontend --dump-topology demo/demo.caps > topo.dot
+
+
+Then render (if you have Graphviz installed):
+
+dot -Tpng topo.dot -o topo.png
+
+Normal (IR dump)
+caps_frontend demo/demo.caps
+
+*****
+
+How it behaves
+DOT output
+caps_frontend --dump-topology=dot demo.caps > topo.dot
+
+
+If channels are ambiguous: you’ll see dashed edges and warnings in stderr:
+
+warning: group 'Demo' channel 'c' ambiguous (writers=2, readers=1)
+
+TEXT output
+caps_frontend --dump-topology=text demo.caps
+
+
+You’ll get a full summary like:
+
+TOPOLOGY group Demo
+processes:
+  - Producer
+  - Consumer
+channels:
+  - c : channel<int;1>
+uses:
+  - c writers={ProducerA, ProducerB} readers={Consumer}  [AMBIGUOUS]
+edges (Process -> Channel -> Process):
+  - ProducerA -> c -> Consumer  (dashed/ambiguous)  note: ambiguous writers={...} readers={...}
+  - ProducerB -> c -> Consumer  (dashed/ambiguous)  note: ...
+END_TOPOLOGY
+
+Dumps all pipeline-safe groups
+
+If you have multiple groups annotated @pipeline_safe, you’ll get one block per group (and one DOT graph per group).
+
+*****
+
+

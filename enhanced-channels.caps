@@ -1,0 +1,30 @@
+module enhanced_channels
+
+group EnhancedDemo {
+  priority_channel<int; 10> pri_chan
+  timeout_channel<int; 10; 1000> timeout_chan
+
+  process PrioritySender -> () {
+    state Send
+    var val:int = 1
+
+    on Send {
+      do priority_send val -> pri_chan
+      do val = val + 1
+      -> Send
+    }
+  }
+
+  process TimeoutReceiver -> () {
+    state Receive
+
+    on Receive {
+      do rr = try_receive timeout_chan
+      do v:int = rr?
+      // Process v
+      -> Receive
+    }
+  }
+
+  schedule { step PrioritySender; step TimeoutReceiver; repeat }
+}

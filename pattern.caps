@@ -1,0 +1,19 @@
+module pattern_example
+
+group PatternDemo {
+  process Matcher -> () {
+    state MatchState
+    var val:int = 42
+
+    on MatchState {
+      match val {
+        0 => { /* zero */ }
+        n if n > 40 => { /* large */ }
+        _ => { /* other */ }
+      }
+      -> MatchState
+    }
+  }
+
+  schedule { step Matcher; repeat }
+}
