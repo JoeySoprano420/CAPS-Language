@@ -5,18 +5,6 @@
 #include <unordered_set>
 #include <vector>
 
-// CAPS Pipeline Analysis
-// Advanced static analysis for CAPS-Language.
-// Now includes deadlock detection, bounded memory proofs, channel graph analysis,
-// process lifecycle verification, and determinism proofs.
-
-// Key Enhancements:
-// - Deadlock Detection: Analyze process dependencies for cycles.
-// - Bounded Memory Proofs: Prove memory usage stays within limits.
-// - Channel Graph Analysis: Model and verify channel topologies.
-// - Process Lifecycle Verification: Ensure processes reach terminal states.
-// - Determinism Proofs: Verify deterministic execution.
-
 static bool has_ann(const std::vector<Annotation>& anns, const std::string& n) {
   for (auto& a : anns) if (a.name == n) return true;
   return false;
@@ -301,56 +289,4 @@ void PipelineChecker::check_group_pipeline_safe(const GroupDecl& g) {
       }
     }
   }
-}
-
-// Deadlock detection: Check for cycles in process dependencies
-bool detect_deadlocks(const Group& group, Diag& diag) {
-  // Build dependency graph from channels
-  std::unordered_map<std::string, std::vector<std::string>> deps;
-  for (const auto& proc : group.processes) {
-    for (const auto& send : proc.sends) {
-      deps[proc.name].push_back(send.channel);
-    }
-  }
-  // Simplified cycle detection
-  // In practice, use topological sort or DFS
-  return false;  // Placeholder
-}
-
-// Bounded memory proofs: Verify channel sizes and buffer limits
-bool prove_bounded_memory(const Group& group, Diag& diag) {
-  for (const auto& chan : group.channels) {
-    if (chan.capacity > 1000000) {  // Arbitrary limit
-      diag.error(chan.span, "Channel capacity too large for bounded proof");
-      return false;
-    }
-  }
-  return true;
-}
-
-// Channel graph analysis: Build and analyze communication graph
-void analyze_channel_graph(const Group& group, Diag& diag) {
-  // Model as graph: processes -> channels -> processes
-  // Check for bottlenecks, isolation, etc.
-}
-
-// Process lifecycle verification: Ensure all processes can terminate
-bool verify_lifecycles(const Group& group, Diag& diag) {
-  for (const auto& proc : group.processes) {
-    bool has_terminal = false;
-    for (const auto& state : proc.states) {
-      if (state.transitions.empty()) has_terminal = true;
-    }
-    if (!has_terminal) {
-      diag.error(proc.span, "Process has no terminal state");
-      return false;
-    }
-  }
-  return true;
-}
-
-// Determinism proofs: Check for non-deterministic constructs
-bool prove_determinism(const Group& group, Diag& diag) {
-  // Ensure no external inputs, timers are deterministic, etc.
-  return true;  // Placeholder
 }

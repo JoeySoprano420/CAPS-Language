@@ -1,21 +1,4 @@
-﻿// CAPS-Language Frontend Main Entry Point
-// This file orchestrates the compilation pipeline for CAPS-Language,
-// a language focused on deterministic processes, typed channels with ownership transfer,
-// no shared memory, and strong compile-time guarantees.
-// Now massively upgraded with fixed-size buffers, bounded queues, deterministic timers,
-// deterministic I/O, process orchestration tools, static math utilities, and safe FFI to C.
-
-// Key Concepts Enforced:
-// - Deterministic Processes: FSMs with total transitions, explicit scheduling.
-// - Typed Channels: Bounded, type-safe communication with ownership transfer.
-// - Ownership Transfer: Send operations move data, preventing races.
-// - No Shared Memory: Private process state; channels as sole communication.
-// - Compile-Time Guarantees: Type safety, bounds, topology validated statically.
-// - New Upgrades: Fixed-size buffers (compile-time sized), bounded queues (channels),
-//   deterministic timers (monotonic), deterministic I/O (bounded ops),
-//   orchestration (spawn/join/monitor), static math (compile-time funcs), safe FFI (type-checked calls).
-
-#include <iostream>
+﻿#include <iostream>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -173,7 +156,6 @@ int main(int argc, char** argv) {
   // Sema (also runs pipeline checks)
   Sema sema(diag);
   sema.check(prog);
-  sema.check_advanced(prog);  // New: Run advanced analyses
 
   if (diag.has_errors()) {
     diag.print_all(std::cerr);
@@ -226,13 +208,9 @@ int main(int argc, char** argv) {
 
   // Default output (IR) if not check-only
   if (!opt.check_only) {
-    // IR Lowering
     Lowering lower;
     for (auto& g : prog.groups) {
       IRGroup irg = lower.lower_group(g);
-      // Apply optimizations
-      optimize_ir(irg);
-
       if (!opt.output_ir_file.empty()) {
         std::ofstream ofs(opt.output_ir_file);
         if (!ofs) {

@@ -385,25 +385,3 @@ void Sema::check_action(GroupDecl& g, GroupEnv& env, ProcessDecl& p,
     return;
   }
 }
-
-// Sema for new features
-Type* Sema::check_match_expr(const MatchExpr& expr) {
-  diag.error(expr.span, "match expressions not yet implemented");
-  return nullptr;
-}
-
-Type* Sema::check_array_expr(const ArrayExpr& expr) {
-  diag.error(expr.span, "array expressions not yet implemented");
-  return nullptr;
-}
-
-void Sema::check_for_loop(const ForLoop& loop) {
-  if (!is_compile_time_constant(loop.end.get())) {
-    diag.error(loop.span, "Loop end must be compile-time constant");
-  }
-}
-
-void Sema::check_const_fn(const ConstFnDecl& fn) {
-  // Ensure no side effects, only compile-time operations
-  diag.error(fn.pos, "const functions not yet implemented");
-}

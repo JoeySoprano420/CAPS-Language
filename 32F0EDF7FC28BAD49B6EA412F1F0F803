@@ -1,0 +1,37 @@
+﻿#pragma once
+#include <string>
+#include <vector>
+#include <cstdint>
+
+namespace caps::x64 {
+
+// Forward declarations for the full x86-64 backend
+// This would implement the complete pipeline: CAPS-H -> Core IR -> x86-64 instruction IR -> .obj/.asm
+
+struct X64Instruction {
+  // Placeholder for x86-64 instruction representation
+  std::string mnemonic;
+  std::vector<std::string> operands;
+  std::vector<uint8_t> bytes;
+};
+
+struct X64Function {
+  std::string name;
+  uint32_t text_begin;
+  uint32_t text_end;
+  std::vector<X64Instruction> instructions;
+  // Add locals, scopes, inlines, etc. for debug
+};
+
+struct X64Module {
+  std::vector<X64Function> functions;
+  // .bss globals, relocs, etc.
+};
+
+// Emit .asm file
+bool emit_asm(const X64Module& mod, const std::string& filename);
+
+// Emit .obj file with COFF format, unwind, debug
+bool emit_obj(const X64Module& mod, const std::string& filename);
+
+} // namespace caps::x64
