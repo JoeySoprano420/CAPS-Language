@@ -323,6 +323,27 @@ CAPS ships with a full ecosystem:
 **Safe FFI Layers**: C interop.
 **Deterministic File/Network APIs**: Predictable ops.
 
+---
+
+### 1️⃣3️⃣ Comprehensive Test Suites
+
+CAPS includes extensive test suites:
+
+- **Unit Tests**: Individual component testing.
+- **Integration Tests**: Component interaction verification.
+- **Regression Tests**: Prevent regressions.
+- **Conformance Suites**: Language compliance checks.
+- **Backend Tests**: Code generation validation.
+- **Stdlib Tests**: Standard library testing.
+- **Deadlock Conformance Tests**: Deadlock detection verification.
+- **Channel Graph Tests**: Communication graph analysis.
+- **Determinism Tests**: Deterministic behavior validation.
+- **Platform Tests**: Cross-platform compatibility.
+- **Fuzzing Harnesses**: Automated bug finding.
+- **Formal Verification Artifacts**: Models and proofs.
+
+**Run Tests**: `ctest` or individual executables.
+
 
 
 

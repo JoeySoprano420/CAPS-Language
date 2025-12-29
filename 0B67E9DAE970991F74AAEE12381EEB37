@@ -1,5 +1,6 @@
 ﻿# CAPS-Language Build System
 # Enhanced with tools: formatter, linter, package manager, debugger, LSP, build, profiler, docgen, analyzer, perf.
+# Tests: unit, integration, deadlock, channel_graph, determinism, backend, platform, regression.
 
 cmake_minimum_required(VERSION 3.15)
 project(CAPS)
@@ -18,3 +19,6 @@ add_subdirectory(tools/profiler)
 add_subdirectory(tools/docgen)
 add_subdirectory(tools/analyzer)
 add_subdirectory(tools/perf)
+
+# Tests
+add_subdirectory(tests)

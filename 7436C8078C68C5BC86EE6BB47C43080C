@@ -272,6 +272,7 @@ Annotations and static analysis enforce safety properties like acyclicity and bo
 - **Generate Docs**: `./caps_docgen src/ --output=docs/`
 - **Static Analyze**: `./caps_analyzer hello.caps`
 - **Performance**: `./caps_perf hello.caps`
+- **Run Tests**: `ctest` or `./unit_tests`, `./deadlock_tests`, etc.
 
 ---
 

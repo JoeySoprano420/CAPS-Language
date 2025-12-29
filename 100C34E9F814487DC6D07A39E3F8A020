@@ -1,1 +1,35 @@
-﻿
+﻿# CAPS Standard Library
+
+The CAPS stdlib provides essential modules for common tasks.
+
+## Modules
+
+### Core
+- **option**: Optional values (`Option<T>`)
+- **result**: Error handling (`Result<T, E>`)
+- **vec**: Dynamic vectors (`Vec<T>`)
+- **map**: Hash maps (`Map<K, V>`)
+- **string**: String utilities
+
+### Math
+- **math**: Trigonometry, algebra, constants
+- **random**: Deterministic random number generation
+
+### Concurrency
+- **sync**: Synchronization primitives (Mutex, etc.)
+- **channel**: Advanced channel types
+- **time**: Timer utilities
+
+### I/O
+- **io**: File and console I/O
+- **net**: Networking (if applicable)
+
+### Utils
+- **iter**: Iterator utilities
+- **fmt**: Formatting
+- **test**: Testing framework
+
+## Usage
+Import modules: `import std.math;`
+
+Use: `let pi = std::math::PI;`
