@@ -1,0 +1,28 @@
+// CAPS Stdlib: Embedded Drivers
+// Drivers for embedded systems.
+
+module std.drivers;
+
+pub struct GPIO {
+  pin: int
+}
+
+pub fn gpio_init(pin: int) -> GPIO {
+  GPIO { pin }
+}
+
+pub fn gpio_set(gpio: &GPIO, value: bool) {
+  // Set GPIO
+}
+
+pub struct UART {
+  baud: int
+}
+
+pub fn uart_init(baud: int) -> UART {
+  UART { baud }
+}
+
+pub fn uart_write(uart: &UART, data: &[u8]) {
+  // Write to UART
+}

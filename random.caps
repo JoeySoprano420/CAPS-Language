@@ -1,0 +1,18 @@
+// CAPS Stdlib: Random
+// Deterministic random number generation.
+
+module std.random;
+
+pub struct Rng {
+  state: int
+}
+
+pub fn new_rng(seed: int) -> Rng {
+  Rng { state: seed }
+}
+
+pub fn next_int(rng: &mut Rng) -> int {
+  // Deterministic PRNG
+  rng.state = (rng.state * 1103515245 + 12345) % (1 << 31);
+  rng.state
+}

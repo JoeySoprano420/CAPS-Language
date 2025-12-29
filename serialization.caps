@@ -1,0 +1,14 @@
+// CAPS Stdlib: Serialization
+// Deterministic serialization.
+
+module std.serialization;
+
+pub fn serialize<T>(value: &T) -> Vec<u8> {
+  // Serialize deterministically
+  Vec::new()  // Placeholder
+}
+
+pub fn deserialize<T>(data: &[u8]) -> Result<T, text> {
+  // Deserialize deterministically
+  Err("Not implemented")  // Placeholder
+}

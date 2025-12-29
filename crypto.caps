@@ -1,0 +1,19 @@
+// CAPS Stdlib: Crypto
+// Cryptographic utilities.
+
+module std.crypto;
+
+pub fn hash_sha256(data: &[u8]) -> [u8; 32] {
+  // SHA256 implementation
+  [0; 32]  // Placeholder
+}
+
+pub fn encrypt_aes(key: &[u8; 16], data: &[u8]) -> Vec<u8> {
+  // AES encryption
+  Vec::new()  // Placeholder
+}
+
+pub fn decrypt_aes(key: &[u8; 16], data: &[u8]) -> Vec<u8> {
+  // AES decryption
+  Vec::new()  // Placeholder
+}

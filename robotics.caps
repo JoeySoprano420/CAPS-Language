@@ -1,0 +1,17 @@
+// CAPS Stdlib: Robotics
+// Robotics primitives.
+
+module std.robotics;
+
+pub struct Joint {
+  angle: real
+}
+
+pub fn move_joint(joint: &mut Joint, target: real) {
+  // Move to target angle deterministically
+  joint.angle = target;
+}
+
+pub fn get_position(joint: &Joint) -> real {
+  joint.angle
+}
