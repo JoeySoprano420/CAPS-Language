@@ -1,0 +1,822 @@
+﻿# CAPS-Language
+Computational Algorithmic Programming Sequence Language
+
+---
+
+## 1. What CAPS Does **So Far** (With the Upgrade Included)
+
+### At its core, CAPS is:
+
+> **A deterministic, analyzable, state-machine language for orchestrating communicating processes with compile-time guarantees.**
+
+That’s not marketing—that’s literally what your compiler enforces.
+
+### CAPS currently models **four things extremely well**
+
+---
+
+### 1️⃣ Deterministic process state machines
+
+Each `process` is:
+
+* A **finite state machine**
+* With:
+
+  * Explicit states
+  * Explicit transitions
+  * Exactly one transition per state evaluation
+* No implicit control flow
+* No hidden loops
+* No scheduler ambiguity
+
+This alone already makes CAPS stronger than:
+
+* ad-hoc event loops
+* callback soup
+* actor systems with implicit scheduling
+* coroutine systems with hidden suspension points
+
+**Why Deterministic Processes Matter:**
+
+In traditional concurrent programming, processes often have implicit state managed by threads, locks, or event queues. This leads to non-determinism: the same program can behave differently on different runs due to timing, scheduling, or race conditions. CAPS eliminates this by making state explicit and transitions total.
+
+**Key Benefits:**
+- **Predictability**: Every execution path is statically analyzable. You can reason about program behavior without running it.
+- **Debuggability**: No "heisenbugs" from timing issues. State transitions are logged and traceable.
+- **Safety**: Deadlocks and livelocks are caught at compile-time via FSM analysis.
+- **Performance**: No runtime overhead for state management; transitions are compiled to efficient jumps.
+
+**Example FSM in CAPS:**
+```
+process TrafficLight -> () {
+  state Red, Yellow, Green
+  var timer:int = 0
+
+  on Red {
+    do timer = timer + 1
+    if timer == 30 { do timer = 0; -> Green } else { -> Red }
+  }
+  on Green {
+    do timer = timer + 1
+    if timer == 45 { do timer = 0; -> Yellow } else { -> Green }
+  }
+  on Yellow {
+    do timer = timer + 1
+    if timer == 5 { do timer = 0; -> Red } else { -> Yellow }
+  }
+}
+```
+This FSM cycles deterministically: Red (30 ticks) → Green (45 ticks) → Yellow (5 ticks) → Red. No external events can interrupt; the process yields control explicitly.
+
+**Compile-Time Enforcement:**
+- Parser ensures every `on` block has exactly one transition (total functions).
+- Sema validates state names and prevents unreachable states.
+- IR lowering normalizes transitions to eliminate ambiguity.
+
+**Comparison to Alternatives:**
+- **Threads**: Non-deterministic scheduling; CAPS bakes schedule into code.
+- **Async/Await**: Implicit suspension; CAPS makes state explicit.
+- **Actors**: Message queues can overflow; CAPS bounds channels statically.
+
+---
+
+### 2️⃣ Typed message-passing over bounded channels
+
+Channels are:
+
+* Declared at **group scope**
+* Typed: `channel<T; N>`
+* Bounded (capacity known at compile time)
+* Explicitly written to and read from
+
+And the compiler enforces:
+
+* correct typing on send/receive
+* visibility rules (group scoping)
+* explicit handling of blocking vs non-blocking (`send` vs `try_send`)
+* boundedness analysis (`max_sends`, `max_receives`)
+
+This makes CAPS fundamentally **anti-footgun** for concurrency.
+
+**Ownership Transfer and No Shared Memory:**
+
+CAPS's design eliminates shared mutable state entirely, relying on **ownership transfer** via channels. This is a radical departure from traditional concurrency models.
+
+**Ownership Transfer:**
+- When you `send value -> channel`, ownership of `value` transfers from the sender to the channel.
+- The sender can no longer access `value`; it's "moved" into the channel's buffer.
+- On `receive`, ownership transfers to the receiver.
+- Prevents aliasing: No two entities own the same data simultaneously.
+- Memory Safety: No double-frees, no data races, no concurrent mutations.
+
+**No Shared Memory:**
+- Processes have private state; no global variables or heap sharing.
+- Channels are the sole communication mechanism—no locks, no atomics, no volatiles.
+- Eliminates the "shared state concurrency" pitfalls: deadlocks from lock ordering, livelocks from contention, races from unsynchronized access.
+- Simplifies Debugging: Issues are localized to processes or channels, not global state.
+
+**Why This Matters:**
+- **Composability**: Processes are independent; combine without interference.
+- **Scalability**: No contention on shared resources.
+- **Correctness**: Ownership rules prevent entire classes of bugs.
+- **Performance**: No synchronization overhead; channels are efficient ring buffers.
+
+**Example Ownership Flow:**
+```
+process Producer -> () {
+  var data:int = 42  // Owned by Producer
+  on Send {
+    do send data -> chan  // Ownership transfers to chan
+    // data is now invalid; cannot use it
+    -> Done
+  }
+}
+
+process Consumer -> () {
+  on Receive {
+    do rr = try_receive chan
+    do owned_data:int = rr?  // Ownership transfers to Consumer
+    // Process owned_data...
+    -> Receive
+  }
+}
+```
+Data flows unidirectionally: Producer → Channel → Consumer. No sharing, no races.
+
+**Compile-Time Enforcement:**
+- Ownership is implicit in the type system; no explicit `move` keywords needed.
+- Sema ensures channels are the only cross-process data path.
+- IR lowering tracks ownership to prevent invalid accesses.
+
+**Comparison to Alternatives:**
+- **Shared Memory (C++/Rust)**: Requires manual synchronization; CAPS automates it.
+- **Message Passing (Erlang/Go)**: Often allows sharing; CAPS enforces transfer.
+- **Functional Concurrency**: Immutable data; CAPS extends to mutable with safety.
+
+---
+
+### 3️⃣ Deterministic scheduling as a *language feature*
+
+The `schedule` is not runtime policy—it is **part of the program**.
+
+* Schedule steps must match process names
+* Schedule order is validated against dataflow topology (`@pipeline_safe`)
+* Execution order is **baked into emitted code**
+* No OS threads required
+* No runtime scheduler decisions
+
+This gives CAPS something very rare:
+
+> **Deterministic concurrency without runtime scheduling.**
+
+That’s huge.
+
+---
+
+### 4️⃣ Compile-time enforced correctness properties
+
+With the upgrade, CAPS now enforces:
+
+| Property                      | Enforced at                 |
+| ----------------------------- | --------------------------- |
+| Total state transitions       | Parser / sema               |
+| Channel type safety           | Sema                        |
+| Group scoping                 | Sema                        |
+| Schedule validity             | Sema                        |
+| Pipeline DAG                  | Sema (`@pipeline_safe`)     |
+| Bounded communication         | Sema (`max_sends/receives`) |
+| No blocking in realtime       | Sema (`@realtimesafe`)      |
+| Error propagation correctness | IR lowering (`? → __Error`) |
+
+Most languages *document* these as guidelines.
+
+CAPS **refuses to compile** without them.
+
+**Why Compile-Time Guarantees Matter:**
+
+Traditional languages rely on runtime checks, testing, or documentation for correctness. CAPS shifts these to compile-time, catching errors before execution. This is essential for safety-critical systems where failures can be catastrophic.
+
+**Detailed Guarantees:**
+
+1. **Total State Transitions**: Every FSM state must have a complete transition. Prevents "stuck" processes.
+   - Enforced: Parser checks every `on` block ends with `-> State`.
+
+2. **Channel Type Safety**: Sends/receives must match channel types.
+   - Enforced: Sema verifies expressions against `channel<T; N>`.
+
+3. **Group Scoping**: Channels and processes are isolated to groups.
+   - Enforced: No cross-group references; prevents unintended coupling.
+
+4. **Schedule Validity**: Schedule must reference existing processes and respect data flow.
+   - Enforced: Sema validates `step P` against process names and topology.
+
+5. **Pipeline DAG**: `@pipeline_safe` ensures acyclic channel graphs.
+   - Enforced: Graph analysis detects cycles; prevents deadlocks.
+
+6. **Bounded Communication**: Limits on sends/receives prevent resource exhaustion.
+   - Enforced: Static counters; runtime bounds checked.
+
+7. **No Blocking in Realtime**: `@realtimesafe` forbids blocking ops.
+   - Enforced: Sema rejects `send`/`receive` in annotated groups.
+
+8. **Error Propagation**: `?` correctly desugars to `__Error` state.
+   - Enforced: IR lowering ensures consistent handling.
+
+**Benefits:**
+- **Zero Runtime Overhead**: No assertions or checks in generated code.
+- **Early Error Detection**: Catch bugs during development, not deployment.
+- **Formal Verification Ready**: Static properties enable model checking.
+- **Maintainability**: Changes are validated immediately.
+
+**Example with Guarantees:**
+```
+@pipeline_safe
+@realtimesafe
+@max_sends(data, 100)
+group SafePipeline {
+  channel<int; 50> data
+
+  process Source -> () {
+    // Total transitions enforced
+    on Produce { do try_send 1 -> data; -> Produce }  // Bounded sends
+  }
+
+  process Sink -> () {
+    on Consume {
+      do rr = try_receive data  // Type-safe
+      do val:int = rr?
+      -> Consume
+    }
+  }
+
+  schedule { step Source; step Sink; repeat }  // Valid schedule
+}
+```
+This group is guaranteed deadlock-free, type-safe, and realtime-compatible at compile-time.
+
+**Comparison to Alternatives:**
+- **Testing**: Finds bugs late; CAPS prevents them.
+- **Linting**: Suggests issues; CAPS enforces them.
+- **Contracts**: Runtime assertions; CAPS is static.
+
+---
+
+### 5️⃣ Richer Type System
+
+CAPS now features an advanced type system for enhanced expressiveness and safety:
+
+- **Generics**: Parameterized types for reusable components (e.g., `channel<T; N>` extended to custom generics).
+- **Unions and Enums**: Sum types for variant data (e.g., `union { int, text }`).
+- **Algebraic Data Types**: Product types with named fields (e.g., `struct Point { x:int, y:int }`).
+- **Dependent Types**: Types dependent on values for precise bounds (e.g., arrays sized by constants).
+- **Refinement Types**: Subtypes with predicates (e.g., `{int | x > 0}` for positive integers).
+
+**Benefits:**
+- **Expressiveness**: Model complex data without runtime checks.
+- **Safety**: Type-level invariants prevent invalid states.
+- **Optimization**: Rich types enable better codegen.
+
+**Example:**
+```
+struct Config { timeout:int, retries:int }
+union Status { Ok(int), Err(text) }
+
+process Handler(cfg:Config) -> Status {
+  // Type-safe operations
+}
+```
+
+---
+
+### 6️⃣ Better Error Messages
+
+CAPS provides detailed, actionable diagnostics:
+
+- **Contextual Errors**: Include source locations, suggestions, and fix hints.
+- **Type Mismatch Explanations**: Show expected vs. actual types with unification steps.
+- **Topology Violations**: Visualize problematic graphs with `--dump-topology`.
+- **Proof Failures**: Explain why compile-time proofs couldn't be established.
+
+**Example Error:**
+```
+error: Channel 'data' has type 'channel<int; 10>', but trying to send 'text'.
+       Suggestion: Ensure sender and receiver agree on type.
+       Location: producer.caps:15:12
+```
+
+---
+
+### 7️⃣ More Static Analysis
+
+Extended analysis includes:
+
+- **Liveness Checking**: Ensures processes can reach terminal states.
+- **Reachability Analysis**: Detects unreachable code in FSMs.
+- **Resource Bounds**: Proves memory usage stays within limits.
+- **Data Flow Analysis**: Tracks value propagation and dependencies.
+
+**Tools:**
+- `--analyze-liveness`: Check for stuck processes.
+- `--prove-bounds`: Verify resource constraints.
+
+---
+
+### 8️⃣ More Guarantees
+
+Additional annotations and enforcements:
+
+- `@no_deadlock`: Proves absence of deadlocks via model checking.
+- `@realtime_bounded`: Ensures worst-case execution time.
+- `@memory_safe`: Prevents leaks and invalid accesses.
+
+---
+
+### 9️⃣ More Compile-Time Proofs
+
+CAPS integrates formal verification:
+
+- **Automated Theorem Prover**: Proves invariants using Z3 or similar.
+- **Model Checking**: Verifies FSM properties.
+- **Temporal Logic**: Asserts properties like "eventually terminates".
+
+**Example Proof:**
+```
+@prove { forall p: process, exists s: state | reachable(s) and terminal(s) }
+```
+
+---
+
+### 🔟 More Optimizations
+
+Advanced passes for performance:
+
+- **Constant Folding**: Evaluate expressions at compile-time.
+- **Inlining**: Embed small functions for speed.
+- **Dead Code Elimination**: Remove unused states/channels.
+- **Channel Fusion**: Merge compatible channels.
+
+**Flags:**
+- `--optimize-aggressive`: Enable all passes.
+- `--profile-guided`: Use runtime data for optimization.
+
+---
+
+## 2. What CAPS Is Geared Toward **Right Now**
+
+### CAPS is already a strong fit for:
+
+---
+
+## 🔧 1. Deterministic systems logic
+
+Anywhere you need **guaranteed behavior**, not “best effort”.
+
+Examples:
+
+* Device controllers
+* Protocol engines
+* State-driven simulations
+* Transaction pipelines
+* Control loops
+* Safety-critical orchestration (non-hard-real-time yet)
+
+CAPS excels when:
+
+* “What happens next?” must be provable
+* Timing and order matter
+* You want to audit logic statically
+
+---
+
+## 🔄 2. Message-passing pipelines
+
+Especially where:
+
+* One process produces
+* One consumes
+* Possibly multiple stages
+* Order matters
+* Backpressure matters
+
+`@pipeline_safe` + schedule + bounded channels is *exactly* a pipeline compiler.
+
+Think:
+
+* streaming transforms
+* ETL pipelines
+* packet processing chains
+* sensor → filter → aggregator → sink
+
+But unlike frameworks:
+
+* topology is compile-time checked
+* cycles are forbidden (when annotated)
+* schedule violations are compile errors
+
+---
+
+## 🧠 3. Explicit FSM-based logic instead of implicit loops
+
+CAPS replaces:
+
+* `while(true)` loops
+* callback trees
+* promise chains
+* ad-hoc state flags
+
+with:
+
+* named states
+* explicit transitions
+* explicit error states
+
+This is ideal when:
+
+* correctness > convenience
+* clarity > brevity
+
+---
+
+## 🧪 4. Analysis-first systems
+
+Because you own the IR, CAPS is *already* good for:
+
+* static verification
+* topology visualization (`--dump-topology`)
+* determinism checks
+* offline reasoning
+
+This makes CAPS particularly suitable for:
+
+* internal infrastructure tools
+* system prototypes
+* correctness-first engines
+
+---
+
+## 3. What CAPS Is **Not Yet** (Intentionally)
+
+Right now CAPS is **not** trying to be:
+
+* A general-purpose application language
+* A scripting language
+* A UI language
+* A data science language
+* A replacement for C++/Rust in all domains
+
+That’s a strength, not a weakness.
+
+CAPS is focused.
+
+---
+
+## 4. What CAPS Is Geared Toward **In the Future**
+
+Because you now **own the typed IR**, CAPS has a very clear growth path.
+
+---
+
+## 🚀 Near Future (Natural Extensions)
+
+### 1️⃣ Hard realtime & embedded systems
+
+With:
+
+* `@realtimesafe`
+* bounded channels
+* static scheduling
+* no allocation
+* no runtime
+
+CAPS is a **perfect fit** for:
+
+* microcontrollers
+* robotics controllers
+* avionics-style state machines
+* industrial automation
+
+Once LLVM backend exists:
+
+* emit bare-metal ARM
+* no OS required
+
+---
+
+### 2️⃣ Deterministic parallel execution
+
+Later, the same IR can support:
+
+* multi-core execution
+* static partitioning of processes
+* still deterministic because schedule is explicit
+
+Think:
+
+* parallel pipelines
+* dataflow machines
+* lock-free deterministic concurrency
+
+---
+
+### 3️⃣ Verifiable systems programming
+
+CAPS is moving toward:
+
+> **“Executable specification with guarantees.”**
+
+You already have:
+
+* explicit state graphs
+* bounded communication
+* enforced invariants
+
+Future additions:
+
+* temporal assertions
+* compile-time proofs of liveness/safety
+* certified codegen targets
+
+This puts CAPS closer to:
+
+* model-checking languages
+* control DSLs
+* safety-critical systems languages
+
+---
+
+### 4️⃣ Infrastructure orchestration & simulation
+
+Because CAPS describes *behavior over time*, it can grow into:
+
+* simulation engines
+* digital twins
+* system orchestration logic
+* network protocol specs that compile to executables
+
+---
+
+## 5. One-Sentence Summary (Honest & Accurate)
+
+> **CAPS is a deterministic, compile-time verified state-machine and message-passing language designed for building analyzable, high-performance systems where correctness, order, and bounded behavior matter more than convenience.**
+
+**Emphasizing Core Principles:**
+- **Deterministic Processes**: Explicit FSMs ensure predictable execution.
+- **Typed Channels**: Safe, bounded communication with type enforcement.
+- **Ownership Transfer**: Data moves via sends, preventing races.
+- **No Shared Memory**: Private state and channel-based interaction.
+- **Compile-Time Guarantees**: Static validation of safety properties.
+
+---
+
+## 6. Why the Hybrid Upgrade Changes Everything
+
+Before:
+
+* CAPS was already analyzable
+* But runtime execution details were still conceptual
+
+After:
+
+* CAPS has a **real native backend**
+* Semantics are preserved through typed IR
+* Execution is predictable, inspectable, and fast
+* The language is no longer “theoretical”
+
+That upgrade moves CAPS from:
+
+> *“interesting language experiment”*
+> to
+> *“serious systems language foundation.”*
+
+---
+
+CAPS is a custom programming language designed for modeling and executing deterministic concurrent systems, inspired by CSP (Communicating Sequential Processes) and Go's goroutines/channels, but with strong static guarantees for safety, deadlock freedom, and performance. It emphasizes compile-time verification of process interactions, bounded communication, and analyzable topologies.
+
+The project implements a full compiler toolchain: **CAPS source → Typed IR → Native Executable**, with multiple backends (C++ AOT and direct x86-64 codegen). It's built for "serious compiler bootstrap" — owning the semantics while leveraging industrial tools for codegen.
+
+---
+
+## 1. Language Design Philosophy
+
+CAPS is not a general-purpose language but a domain-specific one for **unfolding concurrent computations**:
+- **Determinism**: No hidden nondeterminism; schedules are explicit and verifiable.
+- **Bounded Resources**: Channels have fixed capacities; processes have finite states.
+- **Static Safety**: Compile-time checks for deadlocks, race conditions, and topology violations.
+- **Performance**: Compiles to native code with no runtime VM or garbage collection.
+- **Debuggability**: Full source-level debugging support via CodeView and unwind info.
+
+Key influences:
+- CSP for process algebra and communication.
+- State machines for process behavior.
+- Annotations for domain-specific constraints (e.g., real-time safety).
+
+---
+
+## 2. Core Language Syntax
+
+CAPS programs are organized into **modules** containing **groups**. Each group defines processes, channels, and a schedule.
+
+### 2.1 Top-Level Structure
+```
+module <name>
+
+@pipeline_safe
+@realtimesafe
+group <GroupName> {
+  channel<int; 1024> my_channel  // bounded channel
+
+  process Producer(limit:int) -> () {
+    state Start, Send, Done, __Error
+    var current:int = 1
+
+    on Start { -> Send }
+    on Send {
+      do send current -> my_channel
+      if current == limit { -> Done } else { do current = current + 1; -> Send }
+    }
+    on Done { -> Done }
+    on __Error { -> __Error }
+  }
+
+  process Consumer(count:int) -> (sum:int) {
+    state Start, Receive, Finished, __Error
+    var total:int = 0
+    var received:int = 0
+
+    on Start { -> Receive }
+    on Receive {
+      do rr = try_receive my_channel
+      do value:int = rr?  // ? desugars to error handling
+      do total = total + value
+      do received = received + 1
+      if received == count { -> Finished } else { -> Receive }
+    }
+    on Finished { do sum = total; -> Finished }
+    on __Error { -> __Error }
+  }
+
+  schedule { step Producer; step Consumer; repeat }
+}
+```
+
+### 2.2 Key Constructs
+
+#### Modules and Groups
+- **Module**: Top-level container (e.g., `module demo`).
+- **Group**: Isolated execution unit with channels, processes, and schedule. Groups can have annotations.
+
+#### Channels
+- Declaration: `channel<T; N> name` (e.g., `channel<int; 1024> c`).
+- Operations: `send expr -> chan`, `receive chan -> var`, `try_send`, `try_receive`.
+- Semantics: Rendezvous or buffered; blocking/non-blocking variants.
+
+**Typed Channels in Depth:**
+Channels are the cornerstone of CAPS's concurrency model, ensuring **no shared memory** and enforcing **ownership transfer**. Every channel is typed (`T`) and bounded (`N`), preventing type mismatches and resource exhaustion at compile-time. Operations like `send` transfer ownership, eliminating data races. Non-blocking variants (`try_send`/`try_receive`) return `Result<T, text>`, allowing graceful handling of full/empty states without blocking.
+
+#### Processes
+- Signature: `process Name(inputs) -> (outputs) { ... }`
+- States: Declared explicitly (e.g., `state Start, Send`).
+- Locals: `var/let name:T = expr`
+- On-blocks: `on State { actions; transition }`
+- Transitions: `-> State` or `if cond { then_actions; -> ThenState } else { else_actions; -> ElseState }`
+
+**Deterministic Processes in Depth:**
+Processes are **deterministic finite state machines (FSMs)**, with explicit states and total transitions enforced at compile-time. This ensures every state evaluation leads to exactly one next state, eliminating non-determinism from scheduling or external events. No shared memory means processes operate on private state, communicating solely via channels. Compile-time guarantees prevent deadlocks, livelocks, and unreachable states, making CAPS ideal for safety-critical systems.
+
+#### Expressions
+- Literals: `int`, `real`, `text`, `bool`
+- Operators: Arithmetic (`+`, `-`, `*`, `/`), comparisons (`==`, `!=`, `<`, etc.), logical (`&&`, `||`)
+- Calls: `len(channel)` (builtin)
+- Result handling: `expr?` for error propagation (desugars to `__Error` state)
+
+#### Annotations
+- `@pipeline_safe`: Enforces acyclic topology and schedule consistency.
+- `@realtimesafe`: Disallows blocking ops; enables bounded-time analysis.
+- `@max_sends(chan, limit)`, `@max_receives(chan, limit)`: Static bounds.
+
+**Compile-Time Guarantees in Annotations:**
+Annotations like `@pipeline_safe` provide **compile-time guarantees** by analyzing the process-channel graph for acyclicity and schedule validity. `@realtimesafe` ensures no blocking operations, guaranteeing bounded execution times. Bounds annotations prevent resource overuse, all enforced statically without runtime checks.
+
+#### Types
+- Primitives: `int`, `bool`, `real`, `text`
+- Composites: `Result<T, E>` (e.g., `Result<int, text>` for try ops)
+- Channels: `channel<T; N>`
+- **Generics**: `List<T>`, `Option<T>`
+- **Unions**: `union { int, text }`
+- **Structs**: `struct Point { x:int, y:int }`
+- **Enums**: `enum Color { Red, Green, Blue }`
+- **Refinements**: `{int | x > 0}` (positive integers)
+- **Dependents**: Arrays sized by values (e.g., `array<int; n>` where `n` is constant)
+
+## 3. Semantics and Execution Model
+
+### 3.1 Process Model
+- Each process is a finite state machine (FSM) with explicit states and transitions.
+- Execution is **determistic interleaving** via a fixed schedule (e.g., round-robin).
+- No preemption; processes yield control explicitly via transitions.
+- Error handling: `?` propagates failures to `__Error` state with `__last_error:text`.
+
+**Deterministic Processes Semantics:**
+Processes execute deterministically: given the same inputs and schedule, the same sequence of states and outputs occurs. No external events (threads, signals) can alter state transitions. This is enforced by the parser (total transitions) and sema (state validity), providing **compile-time guarantees** of determinism. No shared memory means state is private, communicated via channels with ownership transfer.
+
+### 3.2 Communication
+- Channels are typed and bounded (ring buffers).
+- Blocking: `send`/`receive` wait if full/empty.
+- Non-blocking: `try_send`/`try_receive` return `Result<bool/text>` or `Result<T,text>`.
+
+**Typed Channels and Ownership Transfer:**
+Communication is strictly via typed channels, ensuring type safety and ownership transfer. Sending moves data ownership to the channel, preventing concurrent access. Receiving transfers ownership to the receiver. This **no shared memory** model eliminates data races, deadlocks from locks, and aliasing issues. Bounded buffers provide backpressure, with compile-time bounds preventing overflow.
+
+### 3.3 Scheduling
+- Explicit schedule in group: `schedule { step P1; step P2; repeat }`
+- Each "tick": Run one step per process in order.
+- Termination: When all processes are in terminal states and channels are empty.
+
+**Compile-Time Guarantees in Scheduling:**
+Schedules are validated at compile-time against process names and data flow topology. `@pipeline_safe` ensures the schedule respects acyclic channel graphs, guaranteeing deadlock freedom. This provides **compile-time guarantees** of progress and termination.
+
+### 3.4 Safety Guarantees
+- **Total Transitions**: Every state has a complete transition (parser-enforced).
+- **Type Safety**: Strict typing; no implicit conversions.
+- **Topology Analysis**: `@pipeline_safe` builds process-channel graph, checks acyclicity, and validates schedule respects data flow.
+- **Real-Time Bounds**: `@realtimesafe` ensures no unbounded waits.
+- **Bound Checks**: Static limits on sends/receives.
+
+**Overall Compile-Time Guarantees:**
+CAPS enforces safety statically: no runtime checks for types, bounds, or topology. This shifts error detection to development, ensuring reliable execution in production.
+
+
+
+## 4. Compiler Architecture
+
+The compiler is a **hybrid frontend/backend** design:
+- **Frontend (Owned)**: Parses, typechecks, enforces CAPS rules, lowers to Typed IR.
+- **Backend (Borrowed)**: Emits native code via industrial tools.
+
+### 4.1 Pipeline Stages
+
+1. **Lexing/Parsing**: Tokenize → AST (recursive descent parser).
+2. **Name Resolution**: Build symbol tables (modules, groups, processes, channels).
+3. **Type Checking**: Infer/check types; enforce channel/process scoping.
+4. **Well-Formedness**: Validate FSMs, transitions, annotations.
+5. **Annotation Enforcement**: Topology graphs, cycle detection, schedule validation.
+6. **Static Analysis**: Liveness, reachability, resource bounds, data flow.
+7. **Compile-Time Proofs**: Automated theorem proving, model checking.
+8. **Optimizations**: Constant folding, inlining, dead code elimination.
+9. **IR Lowering**: AST → Typed IR (desugar `?`, normalize transitions).
+10. **Backend Selection**: Typed IR → C++ (AOT) or x86-64 (direct).
+11. **Codegen**: Emit .cpp/.exe or .asm/.obj with unwind/debug info.
+12. **Linking**: MSVC/lld-link to PE .exe.
+
+**Compile-Time Guarantees in Pipeline:**
+Each stage enforces CAPS's guarantees: parsing ensures total transitions, sema validates types and topology, static analysis proves properties, IR lowering desugars error handling. No shared memory assumptions; ownership is tracked implicitly.
+
+### 4.2 Key Components
+
+#### Frontend
+- **Lexer** (`src/lexer/`): Recognizes keywords, tokens, spans.
+- **Parser** (`src/parser/`): Builds AST; enforces syntax (e.g., total transitions).
+- **Sema** (`src/sema/`): Type checking, scoping, annotation validation.
+- **IR Lowering** (`src/ir/`): AST → Typed IR; constant folding, error desugaring.
+
+#### Backend A: C++ AOT (`src/aot/`)
+- Typed IR → C++ structs/functions.
+- Channels as ring buffers; processes as switch(state).
+- Compiles with MSVC `/O2` to .exe.
+
+**Deterministic Processes in C++ Backend:**
+Generates switch-based FSMs, ensuring deterministic execution. Channels use ownership-transferring ring buffers, no shared memory.
+
+#### Backend B: x86-64 Direct (`src/x64/`)
+- Typed IR → x86-64 instructions (Milestones 3-6).
+- Emits .asm or .obj with COFF format.
+- Includes timers (`GetTickCount64`), unwind (.pdata/.xdata), debug (.debug$S/.debug$T).
+
+**Typed Channels and Ownership in x86-64 Backend:**
+Directly encodes channel operations with ownership transfer, compile-time bounds, and no shared memory primitives.
+
+#### Utilities
+- **Analysis** (`src/analysis/`): Pipeline topology, graph algorithms.
+- **Pretty** (`src/pretty/`): AST/IR dumping.
+- **Backend** (`src/backend/`): Runtime evaluation (for interpretation/testing)
+
+
+
+```
+caps_frontend [options] <file.caps>
+
+Options:
+  --dump-ast                    Print AST
+  --dump-topology=dot|text      Print pipeline topology
+  --check-only                  Typecheck only
+  --output-ir=<file>            Write IR to file
+  --emit-cpp=<dir>              Emit C++ to <dir>/<group>.cpp
+  --compile                     Compile C++ to .exe
+  --emit-asm=<file>             Emit x86-64 assembly
+  --emit-obj=<file>             Emit COFF .obj file
+  --analyze-liveness            Check process liveness
+  --prove-bounds                Verify resource bounds
+  --optimize-aggressive         Enable all optimizations
+  --profile-guided              Use profiling for optimization
+
+
