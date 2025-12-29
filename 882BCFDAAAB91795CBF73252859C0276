@@ -1,0 +1,78 @@
+﻿#include "typed_lowering.h"
+
+namespace caps::aot {
+
+static Type lower_type(const Type& t) {
+  // Assuming Type is the same, but need to map
+  // For now, assume compatible
+  return t;
+}
+
+static Expr lower_expr(const IRExpr& e) {
+  Expr te;
+  te.type = lower_type(e.type);
+  switch (e.kind) {
+    case IRExpr::Kind::LitI64: te.kind = Expr::Kind::LitI64; te.i64 = e.i64; break;
+    case IRExpr::Kind::LitBool: te.kind = Expr::Kind::LitBool; te.b = e.b; break;
+    case IRExpr::Kind::LitF64: te.kind = Expr::Kind::LitF64; te.f64 = e.f64; break;
+    case IRExpr::Kind::LitText: te.kind = Expr::Kind::LitText; te.text = e.text; break;
+    case IRExpr::Kind::Var: te.kind = Expr::Kind::Var; te.var = e.var; break;
+    case IRExpr::Kind::BinOp: te.kind = Expr::Kind::BinOp; te.op = e.op; te.args = {lower_expr(e.args[0]), lower_expr(e.args[1])}; break;
+    case IRExpr::Kind::ResultOk: te.kind = Expr::Kind::ResultOk; te.args = {lower_expr(e.args[0])}; break;
+    case IRExpr::Kind::ResultValue: te.kind = Expr::Kind::ResultValue; te.args = {lower_expr(e.args[0])}; break;
+    case IRExpr::Kind::ResultError: te.kind = Expr::Kind::ResultError; te.args = {lower_expr(e.args[0])}; break;
+    case IRExpr::Kind::Call: te.kind = Expr::Kind::Call; te.func_name = e.func_name; for (auto& a : e.args) te.args.push_back(lower_expr(a)); break;
+    default: throw std::runtime_error("Unknown IRExpr kind");
+  }
+  return te;
+}
+
+static Action lower_action(const IRAction& a) {
+  Action ta;
+  ta.kind = static_cast<Action::Kind>(a.kind); // Assuming same enum
+  ta.dst = a.dst;
+  ta.chan = a.chan;
+  ta.expr = lower_expr(a.expr);
+  ta.recv_type = lower_type(a.recv_type);
+  return ta;
+}
+
+static Transition lower_transition(const IRTransition& t) {
+  Transition tt;
+  tt.kind = static_cast<Transition::Kind>(t.kind);
+  tt.cond = lower_expr(t.cond);
+  tt.then_state = t.then_to;
+  tt.else_state = t.else_to;
+  for (auto& a : t.then_actions) tt.then_actions.push_back(lower_action(a));
+  for (auto& a : t.else_actions) tt.else_actions.push_back(lower_action(a));
+  tt.to_state = t.to;
+  return tt;
+}
+
+static State lower_state(const IRState& s) {
+  State ts;
+  ts.name = s.name;
+  ts.terminal = false; // TODO
+  for (auto& a : s.actions) ts.actions.push_back(lower_action(a));
+  ts.tr = lower_transition(s.transition);
+  return ts;
+}
+
+static Process lower_process(const IRProcess& p) {
+  Process tp;
+  tp.name = p.name;
+  tp.initial_state = ""; // TODO
+  for (auto& s : p.states) tp.states[s.name] = lower_state(s);
+  // TODO locals
+  return tp;
+}
+
+Group lower_typed(const IRGroup& g) {
+  Group tg;
+  tg.name = g.name;
+  // TODO annotations, channels, schedule
+  for (auto& p : g.processes) tg.processes.push_back(lower_process(p));
+  return tg;
+}
+
+} // namespace caps::aot

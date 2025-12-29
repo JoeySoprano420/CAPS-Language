@@ -1,0 +1,47 @@
+﻿// CAPS-Language Demo Program
+// This example demonstrates deterministic processes, typed channels with ownership transfer,
+// no shared memory, and compile-time guarantees in action.
+//
+// Key Features:
+// - Deterministic Processes: Producer and Consumer FSMs with explicit states.
+// - Typed Channels: Bounded int channel for safe communication.
+// - Ownership Transfer: Send moves data to channel; receive transfers to consumer.
+// - No Shared Memory: Processes have private state; channel is the interface.
+// - Compile-Time Guarantees: @pipeline_safe ensures acyclic topology and deadlock freedom.
+
+module demo
+
+@pipeline_safe
+group Demo {
+  channel<int; 1024> chan
+
+  process Producer(limit:int) -> () {
+    state Start, Send, Done
+    var i:int = 1
+
+    on Start { -> Send }
+    on Send {
+      do send i -> chan  // Ownership transfer to channel
+      if i == limit { -> Done } else { do i = i + 1; -> Send }
+    }
+    on Done { -> Done }
+  }
+
+  process Consumer(count:int) -> (sum:int) {
+    state Start, Receive, Finished
+    var total:int = 0
+    var received:int = 0
+
+    on Start { -> Receive }
+    on Receive {
+      do rr = try_receive chan
+      do value:int = rr?  // Ownership transfer to consumer
+      do total = total + value
+      do received = received + 1
+      if received == count { -> Finished } else { -> Receive }
+    }
+    on Finished { do sum = total; -> Finished }
+  }
+
+  schedule { step Producer; step Consumer; repeat }
+}
