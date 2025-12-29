@@ -1,5 +1,5 @@
 # ============================================
-# CAPS Language - . gitignore
+# CAPS Language - .gitignore
 # ============================================
 
 # Visual Studio Files and Folders
@@ -9,20 +9,20 @@
 *.user
 *.suo
 *.userosscache
-*. sln. docstates
-*. vcxproj.user
-*. aps
+*.sln.docstates
+*.vcxproj.user
+*.aps
 *.ncb
 *.opendb
 *.opensdf
 *.sdf
 *.cachefile
-*. VC.db
-*.VC. VC.opendb
+*.VC.db
+*.VC.VC.opendb
 
 # Visual Studio Code
 .vscode/
-*. code-workspace
+*.code-workspace
 
 # Build Results
 # ============================================
@@ -46,14 +46,14 @@ bld/
 *.o
 *.obj
 *.ko
-*. elf
+*.elf
 
 # Precompiled Headers
-*. gch
+*.gch
 *.pch
 
 # Compiled Dynamic Libraries
-*. so
+*.so
 *.dylib
 *.dll
 
@@ -61,10 +61,10 @@ bld/
 *.lai
 *.la
 *.a
-*. lib
+*.lib
 
 # Executables
-*. exe
+*.exe
 *.out
 *.app
 *.i*86
@@ -81,12 +81,12 @@ bld/
 [Bb]uild[Ll]og.*
 
 # NUnit
-*.VisualState. xml
+*.VisualState.xml
 TestResult.xml
 nunit-*.xml
 
 # C++ Coverage Results
-*. coverage
+*.coverage
 *.coveragexml
 
 # ReSharper
@@ -95,7 +95,7 @@ _ReSharper*/
 *.DotSettings.user
 
 # JetBrains Rider
-. idea/
+.idea/
 *.sln.iml
 
 # CMake
@@ -111,7 +111,7 @@ _deps/
 
 # Makefile Build
 Makefile
-*. make
+*.make
 
 # Package Managers
 # ============================================
@@ -121,7 +121,7 @@ vcpkg_installed/
 # Conan
 conaninfo.txt
 conanbuildinfo.*
-conan. lock
+conan.lock
 
 # OS Generated Files
 # ============================================
@@ -130,7 +130,7 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-*. cab
+*.cab
 *.msi
 *.msix
 *.msm
@@ -139,7 +139,7 @@ $RECYCLE.BIN/
 
 # macOS
 .DS_Store
-. AppleDouble
+.AppleDouble
 .LSOverride
 Icon
 ._*
@@ -153,7 +153,7 @@ Icon
 
 # Temporary Files
 # ============================================
-*. tmp
+*.tmp
 *.temp
 *.swp
 *.swo
@@ -167,7 +167,7 @@ Icon
 *.log
 *.sql
 *.sqlite
-*. db
+*.db
 
 # Documentation Build
 # ============================================
@@ -196,7 +196,7 @@ cmake-build-*/
 *.iso
 *.jar
 *.rar
-*. tar
+*.tar
 *.zip
 
 # CAPS Language Specific (adjust as needed)
